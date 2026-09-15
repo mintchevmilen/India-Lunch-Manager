@@ -1,43 +1,54 @@
-const config = window.APP_CONFIG || {};
+console.log("Indian Lunch Order: db.js wird geladen");
 
-const isConfigured =
-    Boolean(config.supabaseUrl) &&
-    Boolean(config.supabaseAnonKey) &&
-    !config.supabaseUrl.includes("YOUR_PROJECT") &&
-    !config.supabaseAnonKey.includes("YOUR_PUBLIC");
+const appConfig = window.APP_CONFIG || {};
+
+const supabaseIsConfigured =
+    Boolean(appConfig.supabaseUrl) &&
+    Boolean(appConfig.supabaseAnonKey) &&
+    !appConfig.supabaseUrl.includes("DEIN-PROJEKT") &&
+    !appConfig.supabaseUrl.includes("YOUR_PROJECT") &&
+    !appConfig.supabaseAnonKey.includes("DEIN_ECHTER_KEY") &&
+    !appConfig.supabaseAnonKey.includes("YOUR_PUBLIC");
 
 let supabaseClient = null;
 
-if (isConfigured) {
+if (!window.supabase) {
+    console.error(
+        "Die Supabase-Bibliothek wurde nicht geladen."
+    );
+} else if (supabaseIsConfigured) {
     supabaseClient = window.supabase.createClient(
-        config.supabaseUrl,
-        config.supabaseAnonKey
+        appConfig.supabaseUrl,
+        appConfig.supabaseAnonKey
+    );
+
+    console.log(
+        "Indian Lunch Order: Supabase Client erstellt"
     );
 }
 
-function createDetailedError(error, context) {
+function buildSupabaseError(error, context) {
     console.error(context, error);
 
-    const details = [
+    const errorParts = [
         error?.message,
         error?.hint,
         error?.details
-    ]
-        .filter(Boolean)
-        .join(" | ");
+    ].filter(Boolean);
 
-    const detailedError = new Error(
-        details || "Unbekannter Supabase-Fehler"
+    const result = new Error(
+        errorParts.join(" | ") ||
+        "Unbekannter Supabase-Fehler"
     );
 
-    detailedError.code = error?.code;
-    detailedError.status = error?.status;
+    result.code = error?.code;
+    result.status = error?.status;
 
-    return detailedError;
+    return result;
 }
 
 window.ILO_DB = {
-    configured: isConfigured,
+    configured: supabaseIsConfigured,
 
     async activeRound(code) {
         if (!supabaseClient) {
@@ -46,8 +57,8 @@ window.ILO_DB = {
             );
         }
 
-        const normalizedCode = String(code || "")
-            .trim();
+        const normalizedCode =
+            String(code || "").trim();
 
         const { data, error } =
             await supabaseClient.rpc(
@@ -58,7 +69,7 @@ window.ILO_DB = {
             );
 
         if (error) {
-            throw createDetailedError(
+            throw buildSupabaseError(
                 error,
                 "get_active_round ist fehlgeschlagen"
             );
@@ -71,7 +82,7 @@ window.ILO_DB = {
         return data[0] || null;
     },
 
-    async menu(roundId) {
+    async loadMenu(roundId) {
         if (!supabaseClient) {
             throw new Error(
                 "Supabase ist nicht konfiguriert."
@@ -82,104 +93,102 @@ window.ILO_DB = {
             await supabaseClient
                 .from("menu_items")
                 .select("*")
-                .eq("round_id", roundId)
-                .eq("available", true)
-                .order("category")
-                .order("item_number");
+                .eq("round_id",*roundId)
+                .eq("avai*able", true)
+                .orde*("category")
+                .orde*("item_number");
 
-        if (error) {
-            throw createDetailedError(
+        if (erro*) {
+            throw buildSupabas*Error(
                 error,
-                "Speisekarte konnte nicht geladen werden"
+    *           "Speisekarte konnte nic*t geladen werden"
             );
-        }
+ *      }
 
-        return data || [];
+        return data || []*
     },
 
-    async submit(payload) {
-        if (!supabaseClient) {
+    async submitOrder(pay*oad) {
+        if (!supabaseClient* {
             throw new Error(
-                "Supabase ist nicht konfiguriert."
+  *             "Supabase ist nicht k*nfiguriert."
             );
-        }
+      * }
 
         console.log(
-            "RPC submit_lunch_order wird aufgerufen:",
-            payload
+         *  "submit_lunch_order Payload:",
+ *          payload
         );
 
-        const { data, error } =
-            await supabaseClient.rpc(
-                "submit_lunch_order",
-                payload
-            );
+    *   const { data, error } =
+       *    await supabaseClient.rpc(
+    *           "submit_lunch_order",
+ *              payload
+            *;
 
         if (error) {
-            throw createDetailedError(
-                error,
-                "submit_lunch_order ist fehlgeschlagen"
+          * throw buildSupabaseError(
+       *        error,
+                "su*mit_lunch_order ist fehlgeschlagen*
             );
         }
 
-        console.log(
-            "Antwort von submit_lunch_order:",
-            data
+       *console.log(
+            "submit_l*nch_order erfolgreich:",
+         *  data
         );
 
-        return data;
+        return *ata;
     },
 
-    async login(email, password) {
-        if (!supabaseClient) {
-            throw new Error(
-                "Supabase ist nicht konfiguriert."
+    async login(email* password) {
+        if (!supabase*lient) {
+            throw new Err*r(
+                "Supabase ist n*cht konfiguriert."
             );
-        }
+*       }
 
-        const { data, error } =
-            await supabaseClient.auth
-                .signInWithPassword({
-                    email,
+        const { data, er*or } =
+            await supabaseC*ient.auth
+                .signInW*thPassword({
+                    e*ail,
                     password
-                });
+*               });
 
-        if (error) {
-            throw createDetailedError(
+        if (er*or) {
+            throw buildSupab*seError(
                 error,
-                "Manager-Anmeldung ist fehlgeschlagen"
+  *             "Manager-Anmeldung fe*lgeschlagen"
             );
-        }
+      * }
 
         return data;
     },
 
-    async logout() {
-        if (!supabaseClient) {
-            return;
-        }
+ *  async logout() {
+        if (!su*abaseClient) {
+            return;*        }
 
-        const { error } =
-            await supabaseClient.auth.signOut();
+        const { error }*=
+            await supabaseClient*auth.signOut();
 
-        if (error) {
-            throw createDetailedError(
+        if (error* {
+            throw buildSupabase*rror(
                 error,
-                "Abmeldung ist fehlgeschlagen"
+     *          "Abmeldung fehlgeschlage*"
             );
         }
     },
-
-    async session() {
-        if (!supabaseClient) {
-            return null;
+*    async getSession() {
+        i* (!supabaseClient) {
+            r*turn null;
         }
 
-        const { data, error } =
-            await supabaseClient.auth.getSession();
+        cons* { data, error } =
+            awa*t supabaseClient.auth.getSession();
 
         if (error) {
-            throw createDetailedError(
+            throw buildSupabaseError(
                 error,
                 "Session konnte nicht geladen werden"
             );
@@ -188,7 +197,7 @@ window.ILO_DB = {
         return data.session;
     },
 
-    async managerRound() {
+    async getLatestRound() {
         if (!supabaseClient) {
             throw new Error(
                 "Supabase ist nicht konfiguriert."
@@ -206,10 +215,10 @@ window.ILO_DB = {
                     }
                 )
                 .limit(1)
-                .single();
+                .maybeSingle();
 
         if (error) {
-            throw createDetailedError(
+            throw buildSupabaseError(
                 error,
                 "Bestellrunde konnte nicht geladen werden"
             );
@@ -218,7 +227,7 @@ window.ILO_DB = {
         return data;
     },
 
-    async managerOrders(roundId) {
+    async getOrders(roundId) {
         if (!supabaseClient) {
             throw new Error(
                 "Supabase ist nicht konfiguriert."
@@ -241,7 +250,7 @@ window.ILO_DB = {
                 );
 
         if (error) {
-            throw createDetailedError(
+            throw buildSupabaseError(
                 error,
                 "Bestellungen konnten nicht geladen werden"
             );
@@ -260,12 +269,12 @@ window.ILO_DB = {
         const { data, error } =
             await supabaseClient
                 .from("order_rounds")
-                .upsert(roundData)
+                .insert(roundData)
                 .select()
                 .single();
 
         if (error) {
-            throw createDetailedError(
+            throw buildSupabaseError(
                 error,
                 "Bestellrunde konnte nicht gespeichert werden"
             );
@@ -274,3 +283,8 @@ window.ILO_DB = {
         return data;
     }
 };
+
+console.log(
+    "Indian Lunch Order: ILO_DB verfügbar",
+    Boolean(window.ILO_DB)
+);
