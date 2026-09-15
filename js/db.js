@@ -105,22 +105,58 @@
 async getOrders(roundId) {
     const db = ensureClient();
 
-    const response = await db
+    const ordersResponse = await db
         .from("orders")
-        .select("*, order_items(*)")
+        .select("*")
         .eq("round_id", roundId)
         .order("created_at", {
             ascending: true
         });
 
-    if (response.error) {
+    if (ordersResponse.error) {
         throw detailedError(
-            response.error,
+            ordersResponse.error,
             "Bestellungen konnten nicht geladen werden"
         );
     }
 
-    return response.data || [];
+    const orders = ordersResponse.data || [];
+
+    if (orders.length === 0) {
+        return [];
+    }
+
+    const orderIds = orders.map(function (order) {
+        return order.id;
+    });
+
+    const itemsResponse = await db
+        .from("order_items")
+        .select("*")
+        .in("order_id", orderIds)
+        .order("id", {
+            ascending: true
+        });
+
+    if (itemsResponse.error) {
+        throw detailedError(
+            itemsResponse.error,
+            "Bestellpositionen konnten nicht geladen werden"
+        );
+    }
+
+    const orderItems = itemsResponse.data || [];
+
+    return orders.map(function (order) {
+        return {
+            ...order,
+            order_items: orderItems.filter(
+                function (item) {
+                    return item.order_id === order.id;
+                }
+            )
+        };
+    });
 },
 
     async saveRound(roundData) {
