@@ -102,16 +102,26 @@
       return response.data;
     },
 
-    async getOrders(roundId) {
-      const db = ensureClient();
-      const response = await db
+async getOrders(roundId) {
+    const db = ensureClient();
+
+    const response = await db
         .from("orders")
         .select("*, order_items(*)")
         .eq("round_id", roundId)
-        .order("created_at", { ascending: true });
-      if (response.error) throw detailedError(response.error, "Bestellungen konnten nicht geladen werden");
-      return response.data || [];
-    },
+        .order("created_at", {
+            ascending: true
+        });
+
+    if (response.error) {
+        throw detailedError(
+            response.error,
+            "Bestellungen konnten nicht geladen werden"
+        );
+    }
+
+    return response.data || [];
+},
 
     async saveRound(roundData) {
       const db = ensureClient();
