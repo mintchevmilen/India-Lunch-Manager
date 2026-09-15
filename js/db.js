@@ -94,7 +94,7 @@
       const db = ensureClient();
       const response = await db
         .from("order_rounds")
-        .select("*")
+        .select("*, order_items(*)")
         .order("created_at", { ascending: false })
         .limit(1)
         .maybeSingle();
