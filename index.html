@@ -10,19 +10,21 @@
 
     <meta
         name="description"
-        content="Gemeinsame Lunch-Bestellung"
+        content="Gemeinsame Lunch-Bestellung bei einem indischen Restaurant"
     >
 
     <title>Indian Lunch Order</title>
 
     <link
-yles.css
+        rel="stylesheet"
+        href="./css/styles.css"
+    >
 </head>
 
 <body>
     <header>
         <div class="brand">
-            🍛
+            <span aria-hidden="true">🍛</span>
             <strong>Indian Lunch Order</strong>
         </div>
 
@@ -44,6 +46,7 @@ yles.css
     </header>
 
     <main>
+        <!-- Hinweis bei fehlender Supabase-Konfiguration -->
         <section
             id="setup"
             class="card warning hidden"
@@ -53,11 +56,12 @@ yles.css
             <p>
                 Bitte die Datei
                 <code>js/config.js</code>
-                mit Supabase-URL und öffentlichem Anon-Key befüllen.
+                mit der Supabase-URL und dem öffentlichen
+                Publishable Key befüllen.
             </p>
         </section>
 
-        <!-- Bestellansicht -->
+        <!-- Bestellansicht für Kollegen -->
         <section id="orderView">
             <div class="hero">
                 <div>
@@ -85,12 +89,14 @@ yles.css
             <div class="toolbar">
                 <input
                     id="participantName"
+                    type="text"
                     autocomplete="name"
                     placeholder="Dein Name"
                 >
 
                 <input
                     id="roundCode"
+                    type="text"
                     autocomplete="off"
                     placeholder="Bestellcode, z. B. FRA-7428"
                 >
@@ -119,12 +125,19 @@ yles.css
             <div
                 id="message"
                 role="status"
+                aria-live="polite"
             ></div>
 
             <div
                 id="menu"
                 class="grid"
-            ></div>
+            >
+                <div class="card panel">
+                    <p>
+                        Noch keine Speisekarte geladen.
+                    </p>
+                </div>
+            </div>
 
             <button
                 id="cartButton"
@@ -138,11 +151,12 @@ yles.css
             </button>
         </section>
 
-        <!-- Lunch-Manager-Ansicht -->
+        <!-- Geschützter Lunch-Manager-Bereich -->
         <section
             id="managerView"
             class="hidden"
         >
+            <!-- Manager-Anmeldung -->
             <div
                 id="loginCard"
                 class="card panel narrow"
@@ -178,9 +192,11 @@ yles.css
                 <p
                     id="loginMessage"
                     role="alert"
+                    aria-live="assertive"
                 ></p>
             </div>
 
+            <!-- Manager-Anwendung -->
             <div
                 id="managerApp"
                 class="hidden"
@@ -225,6 +241,7 @@ yles.css
                     </button>
                 </div>
 
+                <!-- Manager-Dashboard -->
                 <div
                     id="dashboardTab"
                     class="tab card panel"
@@ -236,9 +253,14 @@ yles.css
                         class="stats"
                     ></div>
 
-                    <div id="ordersList"></div>
+                    <div id="ordersList">
+                        <p>
+                            Bestellungen werden geladen.
+                        </p>
+                    </div>
                 </div>
 
+                <!-- Bestellrunde verwalten -->
                 <div
                     id="roundTab"
                     class="tab card panel hidden"
@@ -248,19 +270,22 @@ yles.css
                     <div class="formgrid">
                         <input
                             id="restaurantName"
+                            type="text"
                             value="Tandoori Spezial"
                             placeholder="Restaurant"
                         >
 
                         <input
                             id="restaurantPhone"
+                            type="tel"
                             value="069 - 74 22 32 24"
-                            placeholder="Telefon"
+                            placeholder="Telefonnummer"
                         >
 
                         <input
                             id="newRoundCode"
-                            placeholder="Bestellcode, z. B. FRA-7428"
+                            type="text"
+                            placeholder="Bestellcode"
                         >
 
                         <input
@@ -293,6 +318,10 @@ yles.css
                             <option value="delivered">
                                 Geliefert
                             </option>
+
+                            <option value="cancelled">
+                                Storniert
+                            </option>
                         </select>
                     </div>
 
@@ -305,6 +334,7 @@ yles.css
                     </button>
                 </div>
 
+                <!-- Telefonische Bestellansicht -->
                 <div
                     id="phoneTab"
                     class="tab card panel hidden"
@@ -316,14 +346,14 @@ yles.css
                             id="copyOrder"
                             type="button"
                         >
-                            Kopieren
+                            Bestellung kopieren
                         </button>
 
                         <button
                             id="exportCsv"
                             type="button"
                         >
-                            CSV
+                            CSV exportieren
                         </button>
 
                         <button
@@ -336,18 +366,23 @@ yles.css
 
                     <div id="phoneHeader"></div>
 
-                    <div id="phoneList"></div>
+                    <div id="phoneList">
+                        <p>
+                            Noch keine Bestellpositionen vorhanden.
+                        </p>
+                    </div>
                 </div>
             </div>
         </section>
     </main>
 
-    <!-- Warenkorb -->
+    <!-- Warenkorb-Dialog -->
     <dialog id="cartDialog">
         <form method="dialog">
             <button
                 type="submit"
                 class="close"
+                aria-label="Warenkorb schließen"
             >
                 ✕
             </button>
@@ -355,7 +390,11 @@ yles.css
 
         <h2>Bestellkorb</h2>
 
-        <div id="cartLines"></div>
+        <div id="cartLines">
+            <p>
+                Der Warenkorb ist leer.
+            </p>
+        </div>
 
         <div class="total">
             <b>Gesamt</b>
@@ -367,6 +406,7 @@ yles.css
 
         <textarea
             id="orderNote"
+            rows="3"
             placeholder="Allgemeine Notiz zur Bestellung"
         ></textarea>
 
@@ -381,20 +421,24 @@ yles.css
         <p
             id="cartMessage"
             role="alert"
+            aria-live="assertive"
         ></p>
 
         <p class="hint">
             Die Bestellung wird zentral in Supabase gespeichert.
-            Im Browser wird lediglich eine private Bearbeitungs-ID
-            für eine spätere Änderungsfunktion hinterlegt.
         </p>
     </dialog>
 
-    https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2script>
+    <!-- Supabase-Bibliothek -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 
-    js/config.jsscript>
-    js/db.jsscript>
-    js/app.jsscript>
+    <!-- Anwendungskonfiguration -->
+    ./js/config.jsscript>
+
+    <!-- Datenbankfunktionen -->
+    ./js/db.jsscript>
+
+    <!-- Anwendungslogik -->
+    ./js/app.jsscript>
 </body>
 </html>
-``
