@@ -90,17 +90,27 @@
       return response.data.session;
     },
 
-    async getLatestRound() {
-      const db = ensureClient();
-      const response = await db
+async getLatestRound() {
+    const db = ensureClient();
+
+    const response = await db
         .from("order_rounds")
-        .select("*, order_items(*)")
-        .order("created_at", { ascending: false })
+        .select("*")
+        .order("created_at", {
+            ascending: false
+        })
         .limit(1)
         .maybeSingle();
-      if (response.error) throw detailedError(response.error, "Bestellrunde konnte nicht geladen werden");
-      return response.data;
-    },
+
+    if (response.error) {
+        throw detailedError(
+            response.error,
+            "Bestellrunde konnte nicht geladen werden"
+        );
+    }
+
+    return response.data;
+},
 
 async getOrders(roundId) {
     const db = ensureClient();
