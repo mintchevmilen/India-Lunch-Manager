@@ -1,0 +1,400 @@
+<!doctype html>
+<html lang="de">
+<head>
+    <meta charset="utf-8">
+
+    <meta
+        name="viewport"
+        content="width=device-width, initial-scale=1"
+    >
+
+    <meta
+        name="description"
+        content="Gemeinsame Lunch-Bestellung"
+    >
+
+    <title>Indian Lunch Order</title>
+
+    <link
+yles.css
+</head>
+
+<body>
+    <header>
+        <div class="brand">
+            🍛
+            <strong>Indian Lunch Order</strong>
+        </div>
+
+        <nav>
+            <button
+                type="button"
+                data-view="order"
+            >
+                Bestellen
+            </button>
+
+            <button
+                type="button"
+                data-view="manager"
+            >
+                Lunch Manager
+            </button>
+        </nav>
+    </header>
+
+    <main>
+        <section
+            id="setup"
+            class="card warning hidden"
+        >
+            <h2>Konfiguration erforderlich</h2>
+
+            <p>
+                Bitte die Datei
+                <code>js/config.js</code>
+                mit Supabase-URL und öffentlichem Anon-Key befüllen.
+            </p>
+        </section>
+
+        <!-- Bestellansicht -->
+        <section id="orderView">
+            <div class="hero">
+                <div>
+                    <span
+                        id="roundBadge"
+                        class="badge"
+                    >
+                        Bestellrunde laden
+                    </span>
+
+                    <h1>Heute indisch?</h1>
+
+                    <p id="roundInfo">
+                        Bitte Namen und Bestellcode eingeben.
+                    </p>
+                </div>
+
+                <div class="deadline">
+                    <small>Bestellschluss</small>
+
+                    <b id="deadline">–</b>
+                </div>
+            </div>
+
+            <div class="toolbar">
+                <input
+                    id="participantName"
+                    autocomplete="name"
+                    placeholder="Dein Name"
+                >
+
+                <input
+                    id="roundCode"
+                    autocomplete="off"
+                    placeholder="Bestellcode, z. B. FRA-7428"
+                >
+
+                <button
+                    id="loadRoundButton"
+                    type="button"
+                    class="primary"
+                >
+                    Speisekarte laden
+                </button>
+
+                <input
+                    id="search"
+                    type="search"
+                    placeholder="Gericht suchen"
+                >
+
+                <select id="category">
+                    <option value="">
+                        Alle Kategorien
+                    </option>
+                </select>
+            </div>
+
+            <div
+                id="message"
+                role="status"
+            ></div>
+
+            <div
+                id="menu"
+                class="grid"
+            ></div>
+
+            <button
+                id="cartButton"
+                type="button"
+                class="floating"
+            >
+                Bestellkorb
+                <span id="cartCount">0</span>
+                ·
+                <span id="cartTotal">0,00 €</span>
+            </button>
+        </section>
+
+        <!-- Lunch-Manager-Ansicht -->
+        <section
+            id="managerView"
+            class="hidden"
+        >
+            <div
+                id="loginCard"
+                class="card panel narrow"
+            >
+                <h1>Lunch Manager</h1>
+
+                <p>
+                    Geschützter Zugang über Supabase Auth.
+                </p>
+
+                <input
+                    id="managerEmail"
+                    type="email"
+                    autocomplete="username"
+                    placeholder="E-Mail-Adresse"
+                >
+
+                <input
+                    id="managerPassword"
+                    type="password"
+                    autocomplete="current-password"
+                    placeholder="Passwort"
+                >
+
+                <button
+                    id="loginButton"
+                    type="button"
+                    class="primary wide"
+                >
+                    Anmelden
+                </button>
+
+                <p
+                    id="loginMessage"
+                    role="alert"
+                ></p>
+            </div>
+
+            <div
+                id="managerApp"
+                class="hidden"
+            >
+                <div class="hero">
+                    <div>
+                        <span class="badge">
+                            Lunch Manager
+                        </span>
+
+                        <h1>Bestellrunde verwalten</h1>
+                    </div>
+
+                    <button
+                        id="logoutButton"
+                        type="button"
+                    >
+                        Abmelden
+                    </button>
+                </div>
+
+                <div class="tabs">
+                    <button
+                        type="button"
+                        data-tab="dashboard"
+                    >
+                        Dashboard
+                    </button>
+
+                    <button
+                        type="button"
+                        data-tab="round"
+                    >
+                        Bestellrunde
+                    </button>
+
+                    <button
+                        type="button"
+                        data-tab="phone"
+                    >
+                        Telefon
+                    </button>
+                </div>
+
+                <div
+                    id="dashboardTab"
+                    class="tab card panel"
+                >
+                    <h2>Teilnehmerstatus</h2>
+
+                    <div
+                        id="managerStats"
+                        class="stats"
+                    ></div>
+
+                    <div id="ordersList"></div>
+                </div>
+
+                <div
+                    id="roundTab"
+                    class="tab card panel hidden"
+                >
+                    <h2>Neue Bestellrunde</h2>
+
+                    <div class="formgrid">
+                        <input
+                            id="restaurantName"
+                            value="Tandoori Spezial"
+                            placeholder="Restaurant"
+                        >
+
+                        <input
+                            id="restaurantPhone"
+                            value="069 - 74 22 32 24"
+                            placeholder="Telefon"
+                        >
+
+                        <input
+                            id="newRoundCode"
+                            placeholder="Bestellcode, z. B. FRA-7428"
+                        >
+
+                        <input
+                            id="newDeadline"
+                            type="datetime-local"
+                        >
+
+                        <input
+                            id="deliveryTime"
+                            type="datetime-local"
+                        >
+
+                        <select id="roundStatus">
+                            <option value="draft">
+                                Entwurf
+                            </option>
+
+                            <option value="open">
+                                Offen
+                            </option>
+
+                            <option value="closed">
+                                Geschlossen
+                            </option>
+
+                            <option value="ordered">
+                                Beim Restaurant bestellt
+                            </option>
+
+                            <option value="delivered">
+                                Geliefert
+                            </option>
+                        </select>
+                    </div>
+
+                    <button
+                        id="saveRound"
+                        type="button"
+                        class="primary"
+                    >
+                        Bestellrunde speichern
+                    </button>
+                </div>
+
+                <div
+                    id="phoneTab"
+                    class="tab card panel hidden"
+                >
+                    <div class="actions">
+                        <h2>Telefonische Bestellung</h2>
+
+                        <button
+                            id="copyOrder"
+                            type="button"
+                        >
+                            Kopieren
+                        </button>
+
+                        <button
+                            id="exportCsv"
+                            type="button"
+                        >
+                            CSV
+                        </button>
+
+                        <button
+                            type="button"
+                            onclick="window.print()"
+                        >
+                            PDF / Drucken
+                        </button>
+                    </div>
+
+                    <div id="phoneHeader"></div>
+
+                    <div id="phoneList"></div>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <!-- Warenkorb -->
+    <dialog id="cartDialog">
+        <form method="dialog">
+            <button
+                type="submit"
+                class="close"
+            >
+                ✕
+            </button>
+        </form>
+
+        <h2>Bestellkorb</h2>
+
+        <div id="cartLines"></div>
+
+        <div class="total">
+            <b>Gesamt</b>
+
+            <b id="dialogTotal">
+                0,00 €
+            </b>
+        </div>
+
+        <textarea
+            id="orderNote"
+            placeholder="Allgemeine Notiz zur Bestellung"
+        ></textarea>
+
+        <button
+            id="submitOrder"
+            type="button"
+            class="primary wide"
+        >
+            Bestellung absenden
+        </button>
+
+        <p
+            id="cartMessage"
+            role="alert"
+        ></p>
+
+        <p class="hint">
+            Die Bestellung wird zentral in Supabase gespeichert.
+            Im Browser wird lediglich eine private Bearbeitungs-ID
+            für eine spätere Änderungsfunktion hinterlegt.
+        </p>
+    </dialog>
+
+    https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2script>
+
+    js/config.jsscript>
+    js/db.jsscript>
+    js/app.jsscript>
+</body>
+</html>
+``
