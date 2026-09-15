@@ -112,6 +112,9 @@ async getLatestRound() {
     return response.data;
 },
 
+    return response.data;
+},
+
 async getOrders(roundId) {
     const db = ensureClient();
 
