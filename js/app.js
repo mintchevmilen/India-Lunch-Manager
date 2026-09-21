@@ -463,16 +463,6 @@ document.addEventListener(
                 return;
             }
 
-            const spice =
-                getElement(
-                    `spice-${itemId}`
-                ).value;
-
-            const side =
-                getElement(
-                    `side-${itemId}`
-                ).value;
-
             const note =
                 getElement(
                     `note-${itemId}`
@@ -482,8 +472,6 @@ document.addEventListener(
 
             const cartKey = [
                 itemId,
-                spice,
-                side,
                 note
             ].join("|");
 
@@ -504,8 +492,6 @@ document.addEventListener(
                     unit_price:
                         Number(menuItem.price),
                     quantity: 1,
-                    spice,
-                    side,
                     note
                 });
             }
@@ -584,14 +570,6 @@ document.addEventListener(
                                             )}
                                         </b>
 
-                                        <div class="muted">
-                                            ${escapeHtml(
-                                                item.spice
-                                            )}
-                                            ·
-                                            ${escapeHtml(
-                                                item.side
-                                            )}
                                             ${
                                                 item.note
                                                     ? " · " +
