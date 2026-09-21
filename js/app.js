@@ -413,45 +413,6 @@ document.addEventListener(
                                 </div>
 
                                 <div class="dish-controls">
-                                    <select
-                                        id="spice-${item.id}"
-                                    >
-                                        <option value="mild">
-                                            mild
-                                        </option>
-
-                                        <option
-                                            value="mittelscharf"
-                                            selected
-                                        >
-                                            mittelscharf
-                                        </option>
-
-                                        <option value="scharf">
-                                            scharf
-                                        </option>
-                                    </select>
-
-                                    <select
-                                        id="side-${item.id}"
-                                    >
-                                        <option value="keine Beilage">
-                                            keine Beilage
-                                        </option>
-
-                                        <option value="Reis">
-                                            Reis
-                                        </option>
-
-                                        <option value="Naan">
-                                            Naan
-                                        </option>
-
-                                        <option value="Roti">
-                                            Roti
-                                        </option>
-                                    </select>
-
                                     <input
                                         id="note-${item.id}"
                                         type="text"
