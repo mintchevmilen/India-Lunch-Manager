@@ -169,6 +169,52 @@
       });
     },
 
+    getMyOrder: async function (
+    orderId,
+    editToken
+) {
+    var db = ensureClient();
+
+    var response = await db.rpc(
+        "get_my_lunch_order",
+        {
+            p_order_id: orderId,
+            p_edit_token: editToken
+        }
+    );
+
+    if (response.error) {
+        throw detailedError(
+            response.error,
+            "Eigene Bestellung konnte nicht geladen werden"
+        );
+    }
+
+    return response.data;
+},
+
+setOrderPaid: async function (
+    orderId,
+    paid
+) {
+    var db = ensureClient();
+
+    var response = await db.rpc(
+        "set_order_paid",
+        {
+            p_order_id: orderId,
+            p_paid: paid
+        }
+    );
+
+    if (response.error) {
+        throw detailedError(
+            response.error,
+            "Zahlungsstatus konnte nicht gespeichert werden"
+        );
+    }
+},
+
     saveRound: async function (roundData) {
       var db = ensureClient();
       var response = await db
@@ -183,5 +229,47 @@
     }
   };
 
+var itemHtml = items
+    .map(function (item) {
+        var lineTotal =
+            Number(item.quantity) *
+            Number(item.unit_price);
+
+        return `
+            <div class="row">
+                <div>
+                    <b>
+                        ${item.quantity}
+                        ×
+                        ${escapeHtml(
+                            item.item_number
+                        )}
+                        ${escapeHtml(
+                            item.item_name
+                        )}
+                    </b>
+
+                    ${
+                        item.note
+                            ? `
+                                <div class="muted">
+                                    Sonderwunsch:
+                                    ${escapeHtml(
+                                        item.note
+                                    )}
+                                </div>
+                              `
+                            : ""
+                    }
+                </div>
+
+                <b>
+                    ${formatEuro(lineTotal)}
+                </b>
+            </div>
+        `;
+    })
+    .join("");
+  
   console.log("Indian Lunch Order: db.js fertig, ILO_DB verfuegbar", Boolean(window.ILO_DB));
 })();
