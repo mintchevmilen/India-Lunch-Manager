@@ -1,1399 +1,310 @@
 console.log("Indian Lunch Order: app.js wird geladen");
 
-document.addEventListener(
-    "DOMContentLoaded",
-    function () {
-        console.log(
-            "Indian Lunch Order: DOM vollständig geladen"
-        );
-
-        const getElement = id =>
-            document.getElementById(id);
-
-        const formatEuro = value =>
-            Number(value || 0).toLocaleString(
-                "de-DE",
-                {
-                    style: "currency",
-                    currency: "EUR"
-                }
-            );
-
-        let currentRound = null;
-        let currentMenu = [];
-        let cart = [];
-
-        function escapeHtml(value) {
-            return String(value ?? "").replace(
-                /[&<>"]/g,
-                character => ({
-                    "&": "&amp;",
-                    "<": "&lt;",
-                    ">": "&gt;",
-                    '"': "&quot;"
-                })[character]
-            );
-        }
-
-        function showMessage(text, type = "") {
-            const element =
-                getElement("message");
-
-            if (!element) {
-                console.error(
-                    "Element message wurde nicht gefunden"
-                );
-
-                return;
-            }
-
-            element.className = type;
-            element.textContent = text;
-        }
-
-        function showCartMessage(text, type = "") {
-            const element =
-                getElement("cartMessage");
-
-            if (!element) {
-                return;
-            }
-
-            element.className = type;
-            element.textContent = text;
-        }
-
-        function changeView(viewName) {
-            const orderView =
-                getElement("orderView");
-
-            const managerView =
-                getElement("managerView");
-
-            orderView.classList.toggle(
-                "hidden",
-                viewName !== "order"
-            );
-
-            managerView.classList.toggle(
-                "hidden",
-                viewName !== "manager"
-            );
-
-            if (viewName === "manager") {
-                initializeManager();
-            }
-        }
-
-        document
-            .querySelectorAll("[data-view]")
-            .forEach(button => {
-                button.addEventListener(
-                    "click",
-                    function () {
-                        changeView(
-                            button.dataset.view
-                        );
-                    }
-                );
-            });
-
-        function validateDatabaseConnection() {
-            if (!window.ILO_DB) {
-                showMessage(
-                    "Die Datei js/db.js wurde nicht korrekt geladen.",
-                    "error"
-                );
-
-                return false;
-            }
-
-            if (!ILO_DB.configured) {
-                const setup =
-                    getElement("setup");
-
-                setup.classList.remove("hidden");
-
-                showMessage(
-                    "Supabase ist nicht vollständig konfiguriert. " +
-                    "Bitte js/config.js prüfen.",
-                    "error"
-                );
-
-                return false;
-            }
-
-            getElement("setup")
-                .classList
-                .add("hidden");
-
-            return true;
-        }
-
-        async function loadRound() {
-            showMessage(
-                "Bestellrunde wird geladen …"
-            );
-
-            if (!validateDatabaseConnection()) {
-                return;
-            }
-
-            const code =
-                getElement("roundCode")
-                    .value
-                    .trim();
-
-            if (!code) {
-                showMessage(
-                    "Bitte einen Bestellcode eingeben.",
-                    "error"
-                );
-
-                return;
-            }
-
-            const button =
-                getElement("loadRoundButton");
-
-            button.disabled = true;
-            button.textContent =
-                "Wird geladen …";
-
-            try {
-                const round =
-                    await ILO_DB.activeRound(code);
-
-                if (!round) {
-                    currentRound = null;
-                    currentMenu = [];
-
-                    renderMenu();
-
-                    showMessage(
-                        "Keine offene Bestellrunde für diesen Code gefunden.",
-                        "error"
-                    );
-
-                    return;
-                }
-
-                const menu =
-                    await ILO_DB.loadMenu(round.id);
-
-                if (!menu.length) {
-                    currentRound = round;
-                    currentMenu = [];
-
-                    renderMenu();
-
-                    showMessage(
-                        "Die Bestellrunde wurde gefunden, " +
-                        "enthält aber keine Menüpositionen.",
-                        "error"
-                    );
-
-                    return;
-                }
-
-                currentRound = round;
-                currentMenu = menu;
-
-                getElement("roundBadge")
-                    .textContent =
-                    "Bestellrunde offen";
-
-                getElement("roundInfo")
-                    .textContent =
-                    [
-                        round.restaurant_name,
-                        round.restaurant_phone
-                    ]
-                        .filter(Boolean)
-                        .join(" · ");
-
-                getElement("deadline")
-                    .textContent =
-                    new Date(
-                        round.deadline
-                    ).toLocaleString(
-                        "de-DE",
-                        {
-                            dateStyle: "short",
-                            timeStyle: "short"
-                        }
-                    );
-
-                renderCategories();
-                renderMenu();
-
-                showMessage(
-                    `${menu.length} Gerichte wurden geladen.`,
-                    "success"
-                );
-            } catch (error) {
-                console.error(
-                    "Bestellrunde konnte nicht geladen werden:",
-                    error
-                );
-
-                currentRound = null;
-                currentMenu = [];
-
-                renderMenu();
-
-                showMessage(
-                    "Bestellrunde konnte nicht geladen werden" +
-                    (
-                        error.code
-                            ? ` [${error.code}]`
-                            : ""
-                    ) +
-                    ": " +
-                    error.message,
-                    "error"
-                );
-            } finally {
-                button.disabled = false;
-                button.textContent =
-                    "Speisekarte laden";
-            }
-        }
-
-        getElement("loadRoundButton")
-            .addEventListener(
-                "click",
-                loadRound
-            );
-
-        getElement("roundCode")
-            .addEventListener(
-                "keydown",
-                function (event) {
-                    if (event.key === "Enter") {
-                        event.preventDefault();
-                        loadRound();
-                    }
-                }
-            );
-
-        getElement("search")
-            .addEventListener(
-                "input",
-                renderMenu
-            );
-
-        getElement("category")
-            .addEventListener(
-                "change",
-                renderMenu
-            );
-
-        function renderCategories() {
-            const categories = [
-                ...new Set(
-                    currentMenu
-                        .map(item => item.category)
-                        .filter(Boolean)
-                )
-            ];
-
-            getElement("category").innerHTML =
-                '<option value="">' +
-                "Alle Kategorien" +
-                "</option>" +
-                categories
-                    .map(category => {
-                        return (
-                            '<option value="' +
-                            escapeHtml(category) +
-                            '">' +
-                            escapeHtml(category) +
-                            "</option>"
-                        );
-                    })
-                    .join("");
-        }
-
-        function renderMenu() {
-            const container =
-                getElement("menu");
-
-            if (!currentMenu.length) {
-                container.innerHTML =
-                    '<div class="card panel">' +
-                    "<p>Noch keine Speisekarte geladen.</p>" +
-                    "</div>";
-
-                return;
-            }
-
-            const searchTerm =
-                getElement("search")
-                    .value
-                    .toLowerCase()
-                    .trim();
-
-            const category =
-                getElement("category").value;
-
-            const filteredMenu =
-                currentMenu.filter(item => {
-                    const matchesCategory =
-                        !category ||
-                        item.category === category;
-
-                    const searchableText = [
-                        item.item_number,
-                        item.name,
-                        item.description,
-                        item.category
-                    ]
-                        .join(" ")
-                        .toLowerCase();
-
-                    const matchesSearch =
-                        !searchTerm ||
-                        searchableText.includes(
-                            searchTerm
-                        );
-
-                    return (
-                        matchesCategory &&
-                        matchesSearch
-                    );
-                });
-
-            if (!filteredMenu.length) {
-                container.innerHTML =
-                    '<div class="card panel">' +
-                    "<p>Keine passenden Gerichte gefunden.</p>" +
-                    "</div>";
-
-                return;
-            }
-
-            container.innerHTML =
-                filteredMenu
-                    .map(item => {
-                        return `
-                            <article class="card dish">
-                                <div class="top">
-                                    <span class="tag">
-                                        ${escapeHtml(
-                                            item.item_number
-                                        )}
-                                    </span>
-
-                                    <b>
-                                        ${formatEuro(
-                                            item.price
-                                        )}
-                                    </b>
-                                </div>
-
-                                <h3>
-                                    ${escapeHtml(
-                                        item.name
-                                    )}
-                                </h3>
-
-                                <p>
-                                    ${escapeHtml(
-                                        item.description
-                                    )}
-                                </p>
-
-                                <div>
-                                    <span class="tag">
-                                        ${escapeHtml(
-                                            item.category
-                                        )}
-                                    </span>
-                                </div>
-
-                                <div class="dish-controls">
-                                    <input
-                                        id="note-${item.id}"
-                                        type="text"
-                                        placeholder="Sonderwunsch"
-                                    >
-
-                                    <button
-                                        type="button"
-                                        class="primary add-item-button"
-                                        data-item-id="${item.id}"
-                                    >
-                                        Hinzufügen
-                                    </button>
-                                </div>
-                            </article>
-                        `;
-                    })
-                    .join("");
-
-            document
-                .querySelectorAll(
-                    ".add-item-button"
-                )
-                .forEach(button => {
-                    button.addEventListener(
-                        "click",
-                        function () {
-                            addItem(
-                                button.dataset.itemId
-                            );
-                        }
-                    );
-                });
-        }
-
-        function addItem(itemId) {
-            const menuItem =
-                currentMenu.find(
-                    item => item.id === itemId
-                );
-
-            if (!menuItem) {
-                showMessage(
-                    "Das Gericht wurde nicht gefunden.",
-                    "error"
-                );
-
-                return;
-            }
-
-            const note =
-                getElement(
-                    `note-${itemId}`
-                )
-                    .value
-                    .trim();
-
-            const cartKey = [
-                itemId,
-                note
-            ].join("|");
-
-            const existingItem =
-                cart.find(
-                    item => item.key === cartKey
-                );
-
-            if (existingItem) {
-                existingItem.quantity += 1;
-            } else {
-                cart.push({
-                    key: cartKey,
-                    menu_item_id: itemId,
-                    item_number:
-                        menuItem.item_number,
-                    name: menuItem.name,
-                    unit_price:
-                        Number(menuItem.price),
-                    quantity: 1,
-                    note
-                });
-            }
-
-            renderCart();
-
-            showMessage(
-                `${menuItem.name} wurde hinzugefügt.`,
-                "success"
-            );
-        }
-
-        function renderCart() {
-            const total =
-                cart.reduce(
-                    (sum, item) => {
-                        return (
-                            sum +
-                            Number(
-                                item.unit_price
-                            ) *
-                            Number(
-                                item.quantity
-                            )
-                        );
-                    },
-                    0
-                );
-
-            const count =
-                cart.reduce(
-                    (sum, item) => {
-                        return (
-                            sum +
-                            Number(
-                                item.quantity
-                            )
-                        );
-                    },
-                    0
-                );
-
-            getElement("cartCount")
-                .textContent =
-                String(count);
-
-            getElement("cartTotal")
-                .textContent =
-                formatEuro(total);
-
-            getElement("dialogTotal")
-                .textContent =
-                formatEuro(total);
-
-            if (!cart.length) {
-                getElement("cartLines")
-                    .innerHTML =
-                    "<p>Der Warenkorb ist leer.</p>";
-
-                return;
-            }
-
-            getElement("cartLines")
-                .innerHTML =
-                cart
-                    .map(
-                        (item, index) => {
-                            return `
-                                <div class="row">
-                                    <div>
-                                        <b>
-                                            ${item.quantity}
-                                            ×
-                                            ${escapeHtml(
-                                                item.name
-                                            )}
-                                        </b>
-
-                                            ${
-                                                item.note
-                                                    ? " · " +
-                                                      escapeHtml(
-                                                          item.note
-                                                      )
-                                                    : ""
-                                            }
-                                        </div>
-                                    </div>
-
-                                    <div>
-                                        ${formatEuro(
-                                            item.quantity *
-                                            item.unit_price
-                                        )}
-
-                                        <br>
-
-                                        <button
-                                            type="button"
-                                            class="remove-item-button"
-                                            data-index="${index}"
-                                        >
-                                            Entfernen
-                                        </button>
-                                    </div>
-                                </div>
-                            `;
-                        }
-                    )
-                    .join("");
-
-            document
-                .querySelectorAll(
-                    ".remove-item-button"
-                )
-                .forEach(button => {
-                    button.addEventListener(
-                        "click",
-                        function () {
-                            const index =
-                                Number(
-                                    button.dataset.index
-                                );
-
-                            cart.splice(index, 1);
-                            renderCart();
-                        }
-                    );
-                });
-        }
-
-        getElement("cartButton")
-            .addEventListener(
-                "click",
-                function () {
-                    showCartMessage("");
-
-                    const dialog =
-                        getElement("cartDialog");
-
-                    if (
-                        typeof dialog.showModal ===
-                        "function"
-                    ) {
-                        dialog.showModal();
-                    } else {
-                        alert(
-                            "Der Browser unterstützt den Warenkorb-Dialog nicht."
-                        );
-                    }
-                }
-            );
-
-        function createEditToken() {
-            if (
-                window.crypto &&
-                typeof crypto.randomUUID ===
-                    "function"
-            ) {
-                return crypto.randomUUID();
-            }
-
-            const randomValues =
-                new Uint8Array(16);
-
-            crypto.getRandomValues(
-                randomValues
-            );
-
-            return Array
-                .from(randomValues)
-                .map(value => {
-                    return value
-                        .toString(16)
-                        .padStart(2, "0");
-                })
-                .join("");
-        }
-
-        getElement("submitOrder")
-            .addEventListener(
-                "click",
-                async function () {
-                    const submitButton =
-                        getElement("submitOrder");
-
-                    const participantName =
-                        getElement(
-                            "participantName"
-                        )
-                            .value
-                            .trim();
-
-                    const roundCode =
-                        getElement("roundCode")
-                            .value
-                            .trim();
-
-                    showCartMessage(
-                        "Bestellung wird geprüft …"
-                    );
-
-                    if (
-                        !validateDatabaseConnection()
-                    ) {
-                        showCartMessage(
-                            "Supabase ist nicht vollständig konfiguriert.",
-                            "error"
-                        );
-
-                        return;
-                    }
-
-                    if (!currentRound) {
-                        showCartMessage(
-                            "Bitte zuerst die Bestellrunde laden.",
-                            "error"
-                        );
-
-                        return;
-                    }
-
-                    if (!participantName) {
-                        showCartMessage(
-                            "Bitte deinen Namen eingeben.",
-                            "error"
-                        );
-
-                        return;
-                    }
-
-                    if (!roundCode) {
-                        showCartMessage(
-                            "Bitte einen Bestellcode eingeben.",
-                            "error"
-                        );
-
-                        return;
-                    }
-
-                    if (!cart.length) {
-                        showCartMessage(
-                            "Der Warenkorb ist leer.",
-                            "error"
-                        );
-
-                        return;
-                    }
-
-                    const editToken =
-                        createEditToken();
-
-                    const payload = {
-                        p_round_code:
-                            roundCode,
-                        p_participant_name:
-                            participantName,
-                        p_edit_token:
-                            editToken,
-                        p_note:
-                            getElement(
-                                "orderNote"
-                            )
-                                .value
-                                .trim(),
-                        p_items:
-                            cart.map(item => ({
-                                menu_item_id:
-                                    item.menu_item_id,
-                                quantity:
-                                    Number(
-                                        item.quantity
-                                    ),
-                                spice: "",
-                                side: "",
-                                note:
-                                    item.note || ""
-                            }))
-                    };
-
-                    submitButton.disabled =
-                        true;
-
-                    submitButton.textContent =
-                        "Wird gespeichert …";
-
-                    showCartMessage(
-                        "Bestellung wird zentral gespeichert …"
-                    );
-
-                    try {
-                        const orderId =
-                            await ILO_DB
-                                .submitOrder(
-                                    payload
-                                );
-
-                        localStorage.setItem(
-                            `ilo_edit_${currentRound.id}`,
-                            JSON.stringify({
-                                orderId,
-                                editToken,
-                                name:
-                                    participantName
-                            })
-                        );
-
-                        cart = [];
-                        renderCart();
-
-                        showCartMessage(
-                            "Die Bestellung wurde erfolgreich gespeichert.",
-                            "success"
-                        );
-
-                        setTimeout(
-                            function () {
-                                getElement(
-                                    "cartDialog"
-                                ).close();
-
-                                showMessage(
-                                    "Bestellung wurde erfolgreich gespeichert.",
-                                    "success"
-                                );
-                            },
-                            1000
-                        );
-                    } catch (error) {
-                        console.error(
-                            "Bestellung fehlgeschlagen:",
-                            error
-                        );
-
-                        showCartMessage(
-                            "Bestellung fehlgeschlagen" +
-                            (
-                                error.code
-                                    ? ` [${error.code}]`
-                                    : ""
-                            ) +
-                            ": " +
-                            error.message,
-                            "error"
-                        );
-                    } finally {
-                        submitButton.disabled =
-                            false;
-
-                        submitButton.textContent =
-                            "Bestellung absenden";
-                    }
-                }
-            );
-
-        async function initializeManager() {
-            if (
-                !validateDatabaseConnection()
-            ) {
-                return;
-            }
-
-            try {
-                const session =
-                    await ILO_DB.getSession();
-
-                getElement("loginCard")
-                    .classList
-                    .toggle(
-                        "hidden",
-                        Boolean(session)
-                    );
-
-                getElement("managerApp")
-                    .classList
-                    .toggle(
-                        "hidden",
-                        !session
-                    );
-
-                if (session) {
-                    await loadManagerData();
-                }
-            } catch (error) {
-                getElement("loginMessage")
-                    .textContent =
-                    error.message;
-            }
-        }
-
-        getElement("loginButton")
-            .addEventListener(
-                "click",
-                async function () {
-                    const email =
-                        getElement(
-                            "managerEmail"
-                        )
-                            .value
-                            .trim();
-
-                    const password =
-                        getElement(
-                            "managerPassword"
-                        ).value;
-
-                    const loginMessage =
-                        getElement(
-                            "loginMessage"
-                        );
-
-                    if (!email || !password) {
-                        loginMessage.className =
-                            "error";
-
-                        loginMessage.textContent =
-                            "Bitte E-Mail-Adresse und Passwort eingeben.";
-
-                        return;
-                    }
-
-                    loginMessage.className = "";
-                    loginMessage.textContent =
-                        "Anmeldung wird geprüft …";
-
-                    try {
-                        await ILO_DB.login(
-                            email,
-                            password
-                        );
-
-                        loginMessage.className =
-                            "success";
-
-                        loginMessage.textContent =
-                            "Anmeldung erfolgreich.";
-
-                        await initializeManager();
-                    } catch (error) {
-                        loginMessage.className =
-                            "error";
-
-                        loginMessage.textContent =
-                            "Anmeldung fehlgeschlagen: " +
-                            error.message;
-                    }
-                }
-            );
-
-        getElement("logoutButton")
-            .addEventListener(
-                "click",
-                async function () {
-                    try {
-                        await ILO_DB.logout();
-                        await initializeManager();
-                    } catch (error) {
-                        alert(
-                            "Abmeldung fehlgeschlagen: " +
-                            error.message
-                        );
-                    }
-                }
-            );
-
-        document
-            .querySelectorAll("[data-tab]")
-            .forEach(button => {
-                button.addEventListener(
-                    "click",
-                    function () {
-                        document
-                            .querySelectorAll(
-                                ".tab"
-                            )
-                            .forEach(tab => {
-                                tab.classList.add(
-                                    "hidden"
-                                );
-                            });
-
-                        getElement(
-                            `${button.dataset.tab}Tab`
-                        ).classList.remove(
-                            "hidden"
-                        );
-                    }
-                );
-            });
-
-        async function loadManagerData() {
-            const ordersList =
-                getElement("ordersList");
-
-            ordersList.innerHTML =
-                "<p>Bestellungen werden geladen …</p>";
-
-            try {
-                const round =
-                    await ILO_DB
-                        .getLatestRound();
-
-                if (!round) {
-                    ordersList.innerHTML =
-                        "<p>Keine Bestellrunde vorhanden.</p>";
-
-                    return;
-                }
-
-                const orders =
-                    await ILO_DB
-                        .getOrders(round.id);
-
-                const allItems =
-                    orders.flatMap(order => {
-                        return (
-                            order.order_items || []
-                        ).map(item => ({
-                            ...item,
-                            participantName:
-                                order.participant_name
-                        }));
-                    });
-
-                const total =
-                    allItems.reduce(
-                        (sum, item) => {
-                            return (
-                                sum +
-                                Number(
-                                    item.quantity
-                                ) *
-                                Number(
-                                    item.unit_price
-                                )
-                            );
-                        },
-                        0
-                    );
-
-                const positionCount =
-                    allItems.reduce(
-                        (sum, item) => {
-                            return (
-                                sum +
-                                Number(
-                                    item.quantity
-                                )
-                            );
-                        },
-                        0
-                    );
-
-                getElement("managerStats")
-                    .innerHTML = `
-                        <div class="stat">
-                            Bestellungen
-                            <b>${orders.length}</b>
-                        </div>
-
-                        <div class="stat">
-                            Positionen
-                            <b>${positionCount}</b>
-                        </div>
-
-                        <div class="stat">
-                            Gesamt
-                            <b>${formatEuro(total)}</b>
-                        </div>
-
-                        <div class="stat">
-                            Status
-                            <b>${escapeHtml(
-                                round.status
-                            )}</b>
-                        </div>
-                    `;
-
-                if (!orders.length) {
-                    ordersList.innerHTML =
-                        "<p>Noch keine Bestellungen vorhanden.</p>";
-                } else {
-                    ordersList.innerHTML =
-                        orders
-                            .map(order => {
-                                const descriptions =
-                                    (
-                                        order
-                                            .order_items ||
-                                        []
-                                    )
-                                        .map(item => {
-                                            return (
-                                                item.quantity +
-                                                " × " +
-                                                escapeHtml(
-                                                    item.item_name
-                                                )
-                                            );
-                                        })
-                                        .join(", ");
-
-                                return `
-                                    <div class="row">
-                                        <div>
-                                            <b>
-                                                ${escapeHtml(
-                                                    order.participant_name
-                                                )}
-                                            </b>
-
-                                            <div class="muted">
-                                                ${descriptions}
-                                            </div>
-                                        </div>
-
-                                        <b>
-                                            ${formatEuro(
-                                                order.total_amount
-                                            )}
-                                        </b>
-                                    </div>
-                                `;
-                            })
-                            .join("");
-                }
-
-                const groupedItems = {};
-
-                allItems.forEach(item => {
-                    const key = [
-                        item.menu_item_id,
-                        item.spice,
-                        item.side,
-                        item.note
-                    ].join("|");
-
-                    if (!groupedItems[key]) {
-                        groupedItems[key] = {
-                            ...item,
-                            quantity: 0
-                        };
-                    }
-
-                    groupedItems[key]
-                        .quantity +=
-                        Number(item.quantity);
-                });
-
-                const groupedList =
-                    Object.values(
-                        groupedItems
-                    );
-
-                getElement("phoneHeader")
-                    .innerHTML = `
-                        <p>
-                            <b>
-                                ${escapeHtml(
-                                    round.restaurant_name
-                                )}
-                            </b>
-                            ·
-                            ${escapeHtml(
-                                round.restaurant_phone
-                            )}
-                            ·
-                            Gesamt
-                            ${formatEuro(total)}
-                        </p>
-                    `;
-
-                if (!groupedList.length) {
-                    getElement("phoneList")
-                        .innerHTML =
-                        "<p>Noch keine Bestellpositionen vorhanden.</p>";
-                } else {
-                    getElement("phoneList")
-                        .innerHTML =
-                        groupedList
-                            .map(item => {
-                                return `
-                                    <label class="phone-line">
-                                        <input type="checkbox">
-
-                                        <span>
-                                            <b>
-                                                ${item.quantity}
-                                                ×
-                                                ${escapeHtml(
-                                                    item.item_number
-                                                )}
-                                                ${escapeHtml(
-                                                    item.item_name
-                                                )}
-                                            </b>
-
-                                            <br>
-
-                                            <span class="muted">
-                                                ${escapeHtml(
-                                                    item.spice
-                                                )},
-                                                ${escapeHtml(
-                                                    item.side
-                                                )}
-                                                ${
-                                                    item.note
-                                                        ? ", " +
-                                                          escapeHtml(
-                                                              item.note
-                                                          )
-                                                        : ""
-                                                }
-                                            </span>
-                                        </span>
-                                    </label>
-                                `;
-                            })
-                            .join("");
-                }
-
-                window.phoneOrderText = [
-                    round.restaurant_name,
-                    round.restaurant_phone,
-                    "",
-                    ...groupedList.map(item => {
-                        return [
-                            item.quantity,
-                            "x",
-                            item.item_number,
-                            item.item_name,
-                            "-",
-                            item.spice,
-                            item.side,
-                            item.note || ""
-                        ].join(" ");
-                    }),
-                    "",
-                    `Gesamt: ${formatEuro(total)}`
-                ].join("\n");
-            } catch (error) {
-                console.error(
-                    "Managerdaten konnten nicht geladen werden:",
-                    error
-                );
-
-                ordersList.innerHTML =
-                    '<p class="error">' +
-                    escapeHtml(error.message) +
-                    "</p>";
-            }
-        }
-
-        getElement("copyOrder")
-            .addEventListener(
-                "click",
-                async function () {
-                    try {
-                        await navigator
-                            .clipboard
-                            .writeText(
-                                window
-                                    .phoneOrderText ||
-                                ""
-                            );
-
-                        alert(
-                            "Bestellung wurde kopiert."
-                        );
-                    } catch (error) {
-                        alert(
-                            "Bestellung konnte nicht kopiert werden."
-                        );
-                    }
-                }
-            );
-
-        getElement("exportCsv")
-            .addEventListener(
-                "click",
-                function () {
-                    const content =
-                        "\ufeff" +
-                        (
-                            window
-                                .phoneOrderText ||
-                            ""
-                        );
-
-                    const blob =
-                        new Blob(
-                            [content],
-                            {
-                                type:
-                                    "text/csv;charset=utf-8"
-                            }
-                        );
-
-                    const link =
-                        document.createElement(
-                            "a"
-                        );
-
-                    link.href =
-                        URL.createObjectURL(blob);
-
-                    link.download =
-                        "bestellung.csv";
-
-                    link.click();
-
-                    URL.revokeObjectURL(
-                        link.href
-                    );
-                }
-            );
-
-        getElement("saveRound")
-            .addEventListener(
-                "click",
-                async function () {
-                    const message =
-                        getElement(
-                            "roundSaveMessage"
-                        );
-
-                    const roundData = {
-                        restaurant_name:
-                            getElement(
-                                "restaurantName"
-                            ).value.trim(),
-                        restaurant_phone:
-                            getElement(
-                                "restaurantPhone"
-                            ).value.trim(),
-                        access_code:
-                            getElement(
-                                "newRoundCode"
-                            ).value.trim(),
-                        deadline:
-                            getElement(
-                                "newDeadline"
-                            ).value,
-                        delivery_time:
-                            getElement(
-                                "deliveryTime"
-                            ).value || null,
-                        status:
-                            getElement(
-                                "roundStatus"
-                            ).value
-                    };
-
-                    if (
-                        !roundData.restaurant_name ||
-                        !roundData.access_code ||
-                        !roundData.deadline
-                    ) {
-                        message.className =
-                            "error";
-
-                        message.textContent =
-                            "Restaurant, Bestellcode und Bestellfrist sind erforderlich.";
-
-                        return;
-                    }
-
-                    message.className = "";
-                    message.textContent =
-                        "Bestellrunde wird gespeichert …";
-
-                    try {
-                        await ILO_DB
-                            .saveRound(
-                                roundData
-                            );
-
-                        message.className =
-                            "success";
-
-                        message.textContent =
-                            "Bestellrunde wurde gespeichert.";
-
-                        await loadManagerData();
-                    } catch (error) {
-                        message.className =
-                            "error";
-
-                        message.textContent =
-                            "Bestellrunde konnte nicht gespeichert werden: " +
-                            error.message;
-                    }
-                }
-            );
-
-        renderCart();
-        renderMenu();
-        validateDatabaseConnection();
-
-        console.log(
-            "Indian Lunch Order: Benutzeroberfläche initialisiert"
-        );
+document.addEventListener("DOMContentLoaded", function () {
+  "use strict";
+  console.log("Indian Lunch Order: DOM vollständig geladen");
+
+  var $ = function (id) { return document.getElementById(id); };
+  var currentRound = null;
+  var currentMenu = [];
+  var cart = [];
+
+  function euro(value) {
+    return Number(value || 0).toLocaleString("de-DE", { style: "currency", currency: "EUR" });
+  }
+
+  function esc(value) {
+    return String(value == null ? "" : value).replace(/[&<>"]/g, function (character) {
+      return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[character];
+    });
+  }
+
+  function showMessage(text, type) {
+    $("message").className = type || "";
+    $("message").textContent = text || "";
+  }
+
+  function showCartMessage(text, type) {
+    $("cartMessage").className = type || "";
+    $("cartMessage").textContent = text || "";
+  }
+
+  function databaseReady() {
+    if (!window.ILO_DB || !window.ILO_DB.configured) {
+      $("setup").classList.remove("hidden");
+      showMessage("Supabase ist nicht vollständig konfiguriert.", "error");
+      return false;
     }
-);
+    $("setup").classList.add("hidden");
+    return true;
+  }
+
+  function switchView(name) {
+    $("orderView").classList.toggle("hidden", name !== "order");
+    $("managerView").classList.toggle("hidden", name !== "manager");
+    if (name === "manager") initializeManager();
+  }
+
+  document.querySelectorAll("[data-view]").forEach(function (button) {
+    button.addEventListener("click", function () { switchView(button.dataset.view); });
+  });
+
+  async function loadRound() {
+    if (!databaseReady()) return;
+    var code = $("roundCode").value.trim();
+    if (!code) return showMessage("Bitte einen Bestellcode eingeben.", "error");
+    var button = $("loadRoundButton");
+    button.disabled = true;
+    button.textContent = "Wird geladen …";
+    try {
+      currentRound = await ILO_DB.activeRound(code);
+      if (!currentRound) {
+        currentMenu = [];
+        renderMenu();
+        return showMessage("Keine offene Bestellrunde für diesen Code gefunden.", "error");
+      }
+      currentMenu = await ILO_DB.loadMenu(currentRound.id);
+      $("roundBadge").textContent = "Bestellrunde offen";
+      $("roundInfo").textContent = [currentRound.restaurant_name, currentRound.restaurant_phone].filter(Boolean).join(" · ");
+      $("deadline").textContent = new Date(currentRound.deadline).toLocaleString("de-DE", { dateStyle: "short", timeStyle: "short" });
+      renderCategories();
+      renderMenu();
+      showMessage(currentMenu.length + " Gerichte wurden geladen.", "success");
+      await loadMyStoredOrder();
+    } catch (error) {
+      console.error(error);
+      showMessage("Bestellrunde konnte nicht geladen werden: " + error.message, "error");
+    } finally {
+      button.disabled = false;
+      button.textContent = "Speisekarte laden";
+    }
+  }
+
+  $("loadRoundButton").addEventListener("click", loadRound);
+  $("roundCode").addEventListener("keydown", function (event) {
+    if (event.key === "Enter") { event.preventDefault(); loadRound(); }
+  });
+  $("search").addEventListener("input", renderMenu);
+  $("category").addEventListener("change", renderMenu);
+
+  function renderCategories() {
+    var categories = Array.from(new Set(currentMenu.map(function (item) { return item.category; }).filter(Boolean)));
+    $("category").innerHTML = '<option value="">Alle Kategorien</option>' + categories.map(function (category) {
+      return '<option value="' + esc(category) + '">' + esc(category) + '</option>';
+    }).join("");
+  }
+
+  function renderMenu() {
+    if (!currentMenu.length) {
+      $("menu").innerHTML = '<div class="card panel"><p>Noch keine Speisekarte geladen.</p></div>';
+      return;
+    }
+    var query = $("search").value.toLowerCase().trim();
+    var category = $("category").value;
+    var filtered = currentMenu.filter(function (item) {
+      var text = [item.item_number, item.name, item.description, item.category].join(" ").toLowerCase();
+      return (!category || item.category === category) && (!query || text.indexOf(query) >= 0);
+    });
+    $("menu").innerHTML = filtered.map(function (item) {
+      return '<article class="card dish">' +
+        '<div class="top"><span class="tag">' + esc(item.item_number) + '</span><b>' + euro(item.price) + '</b></div>' +
+        '<h3>' + esc(item.name) + '</h3><p>' + esc(item.description) + '</p>' +
+        '<div><span class="tag">' + esc(item.category) + '</span></div>' +
+        '<div class="dish-controls"><input id="note-' + item.id + '" type="text" placeholder="Sonderwunsch, optional">' +
+        '<button type="button" class="primary add-item-button" data-item-id="' + item.id + '">Hinzufügen</button></div></article>';
+    }).join("");
+    document.querySelectorAll(".add-item-button").forEach(function (button) {
+      button.addEventListener("click", function () { addItem(button.dataset.itemId); });
+    });
+  }
+
+  function addItem(itemId) {
+    var menuItem = currentMenu.find(function (item) { return item.id === itemId; });
+    if (!menuItem) return;
+    var note = $("note-" + itemId).value.trim();
+    var key = itemId + "|" + note;
+    var existing = cart.find(function (item) { return item.key === key; });
+    if (existing) existing.quantity += 1;
+    else cart.push({ key: key, menu_item_id: itemId, item_number: menuItem.item_number, name: menuItem.name, unit_price: Number(menuItem.price), quantity: 1, note: note });
+    renderCart();
+    showMessage(menuItem.name + " wurde hinzugefügt.", "success");
+  }
+
+  function renderCart() {
+    var total = cart.reduce(function (sum, item) { return sum + item.unit_price * item.quantity; }, 0);
+    var count = cart.reduce(function (sum, item) { return sum + item.quantity; }, 0);
+    $("cartCount").textContent = String(count);
+    $("cartTotal").textContent = euro(total);
+    $("dialogTotal").textContent = euro(total);
+    if (!cart.length) return $("cartLines").innerHTML = "<p>Der Warenkorb ist leer.</p>";
+    $("cartLines").innerHTML = cart.map(function (item, index) {
+      return '<div class="row"><div><b>' + item.quantity + ' × ' + esc(item.name) + '</b>' +
+        (item.note ? '<div class="muted">Sonderwunsch: ' + esc(item.note) + '</div>' : '') +
+        '</div><div><b>' + euro(item.quantity * item.unit_price) + '</b><br>' +
+        '<button type="button" class="remove-item" data-index="' + index + '">Entfernen</button></div></div>';
+    }).join("");
+    document.querySelectorAll(".remove-item").forEach(function (button) {
+      button.addEventListener("click", function () { cart.splice(Number(button.dataset.index), 1); renderCart(); });
+    });
+  }
+
+  $("cartButton").addEventListener("click", function () { showCartMessage(""); $("cartDialog").showModal(); });
+
+  function createToken() {
+    if (crypto.randomUUID) return crypto.randomUUID();
+    var values = new Uint8Array(16); crypto.getRandomValues(values);
+    return Array.from(values).map(function (value) { return value.toString(16).padStart(2, "0"); }).join("");
+  }
+
+  function myOrderContainer() {
+    var container = $("myOrderContainer");
+    if (container) return container;
+    container = document.createElement("section");
+    container.id = "myOrderContainer";
+    container.className = "card panel hidden";
+    container.style.marginTop = "18px";
+    $("message").insertAdjacentElement("afterend", container);
+    return container;
+  }
+
+  function renderMyOrder(order) {
+    var container = myOrderContainer();
+    if (!order) { container.classList.add("hidden"); container.innerHTML = ""; return; }
+    var items = order.items || [];
+    container.innerHTML = '<div class="actions"><div><span class="badge">Bestellung gespeichert</span><h2>Deine aktuelle Bestellung</h2>' +
+      '<p class="muted">Bestellung von ' + esc(order.participant_name) + '</p></div><b>' + euro(order.total_amount) + '</b></div>' +
+      items.map(function (item) {
+        return '<div class="row"><div><b>' + item.quantity + ' × ' + esc(item.item_number) + ' ' + esc(item.item_name) + '</b>' +
+          (item.note ? '<div class="muted">Sonderwunsch: ' + esc(item.note) + '</div>' : '') +
+          '</div><b>' + euro(item.quantity * item.unit_price) + '</b></div>';
+      }).join("") + '<div class="total"><b>Gesamt</b><b>' + euro(order.total_amount) + '</b></div>' +
+      '<p class="' + (order.paid ? 'success' : 'muted') + '">' + (order.paid ? 'Zahlung wurde bestätigt.' : 'Zahlung ist noch offen.') + '</p>';
+    container.classList.remove("hidden");
+  }
+
+  async function loadMyStoredOrder() {
+    if (!currentRound) return;
+    var raw = localStorage.getItem("ilo_edit_" + currentRound.id);
+    if (!raw) return renderMyOrder(null);
+    try {
+      var stored = JSON.parse(raw);
+      renderMyOrder(await ILO_DB.getMyOrder(stored.orderId, stored.editToken));
+    } catch (error) { console.error(error); renderMyOrder(null); }
+  }
+
+  $("submitOrder").addEventListener("click", async function () {
+    if (!currentRound) return showCartMessage("Bitte zuerst die Bestellrunde laden.", "error");
+    var name = $("participantName").value.trim();
+    if (!name) return showCartMessage("Bitte deinen Namen eingeben.", "error");
+    if (!cart.length) return showCartMessage("Der Warenkorb ist leer.", "error");
+    var token = createToken();
+    var button = $("submitOrder");
+    button.disabled = true; button.textContent = "Wird gespeichert …";
+    try {
+      var orderId = await ILO_DB.submitOrder({
+        p_round_code: $("roundCode").value.trim(),
+        p_participant_name: name,
+        p_edit_token: token,
+        p_note: $("orderNote").value.trim(),
+        p_items: cart.map(function (item) {
+          return { menu_item_id: item.menu_item_id, quantity: item.quantity, spice: "", side: "", note: item.note || "" };
+        })
+      });
+      localStorage.setItem("ilo_edit_" + currentRound.id, JSON.stringify({ orderId: orderId, editToken: token, name: name }));
+      renderMyOrder(await ILO_DB.getMyOrder(orderId, token));
+      cart = []; renderCart();
+      showCartMessage("Die Bestellung wurde erfolgreich gespeichert.", "success");
+      setTimeout(function () { $("cartDialog").close(); showMessage("Bestellung wurde erfolgreich gespeichert.", "success"); }, 900);
+    } catch (error) {
+      console.error(error); showCartMessage("Bestellung fehlgeschlagen: " + error.message, "error");
+    } finally { button.disabled = false; button.textContent = "Bestellung absenden"; }
+  });
+
+  async function initializeManager() {
+    if (!databaseReady()) return;
+    try {
+      var session = await ILO_DB.getSession();
+      $("loginCard").classList.toggle("hidden", Boolean(session));
+      $("managerApp").classList.toggle("hidden", !session);
+      if (session) await loadManagerData();
+    } catch (error) { $("loginMessage").textContent = error.message; }
+  }
+
+  $("loginButton").addEventListener("click", async function () {
+    try { await ILO_DB.login($("managerEmail").value.trim(), $("managerPassword").value); await initializeManager(); }
+    catch (error) { $("loginMessage").className = "error"; $("loginMessage").textContent = "Anmeldung fehlgeschlagen: " + error.message; }
+  });
+  $("logoutButton").addEventListener("click", async function () { await ILO_DB.logout(); await initializeManager(); });
+  document.querySelectorAll("[data-tab]").forEach(function (button) {
+    button.addEventListener("click", function () {
+      document.querySelectorAll(".tab").forEach(function (tab) { tab.classList.add("hidden"); });
+      $(button.dataset.tab + "Tab").classList.remove("hidden");
+    });
+  });
+
+  async function loadManagerData() {
+    try {
+      var round = await ILO_DB.getLatestRound();
+      if (!round) return $("ordersList").innerHTML = "<p>Keine Bestellrunde vorhanden.</p>";
+      var orders = await ILO_DB.getOrders(round.id);
+      var allItems = orders.flatMap(function (order) { return (order.order_items || []).map(function (item) { return Object.assign({}, item, { participant_name: order.participant_name }); }); });
+      var total = orders.reduce(function (sum, order) { return sum + Number(order.total_amount || 0); }, 0);
+      var positionCount = allItems.reduce(function (sum, item) { return sum + Number(item.quantity); }, 0);
+      var paidOrders = orders.filter(function (order) { return order.paid; });
+      var openOrders = orders.filter(function (order) { return !order.paid; });
+      var openAmount = openOrders.reduce(function (sum, order) { return sum + Number(order.total_amount || 0); }, 0);
+      $("managerStats").innerHTML = '<div class="stat">Bestellungen<b>' + orders.length + '</b></div>' +
+        '<div class="stat">Bezahlt<b>' + paidOrders.length + '</b></div><div class="stat">Zahlung offen<b>' + openOrders.length + '</b></div>' +
+        '<div class="stat">Offener Betrag<b>' + euro(openAmount) + '</b></div><div class="stat">Positionen<b>' + positionCount + '</b></div>' +
+        '<div class="stat">Gesamtsumme<b>' + euro(total) + '</b></div>';
+      $("ordersList").innerHTML = orders.length ? orders.map(function (order) {
+        var descriptions = (order.order_items || []).map(function (item) { return item.quantity + ' × ' + esc(item.item_name); }).join(", ");
+        return '<div class="row"><div><b>' + esc(order.participant_name) + '</b><div class="muted">' + descriptions + '</div></div>' +
+          '<div><b>' + euro(order.total_amount) + '</b><label style="display:flex;gap:7px;margin-top:7px;align-items:center">' +
+          '<input type="checkbox" class="paid-checkbox" data-order-id="' + order.id + '" ' + (order.paid ? 'checked' : '') + '>' +
+          '<span>' + (order.paid ? 'Bezahlt' : 'Zahlung offen') + '</span></label></div></div>';
+      }).join("") : "<p>Noch keine Bestellungen vorhanden.</p>";
+      document.querySelectorAll(".paid-checkbox").forEach(function (checkbox) {
+        checkbox.addEventListener("change", async function () {
+          var paid = checkbox.checked; checkbox.disabled = true;
+          try { await ILO_DB.setOrderPaid(checkbox.dataset.orderId, paid); await loadManagerData(); }
+          catch (error) { checkbox.checked = !paid; alert("Zahlungsstatus konnte nicht gespeichert werden: " + error.message); }
+          finally { checkbox.disabled = false; }
+        });
+      });
+      var grouped = {};
+      allItems.forEach(function (item) {
+        var key = item.menu_item_id + "|" + (item.note || "");
+        if (!grouped[key]) grouped[key] = Object.assign({}, item, { quantity: 0 });
+        grouped[key].quantity += Number(item.quantity);
+      });
+      var groupedList = Object.values(grouped);
+      $("phoneHeader").innerHTML = '<p><b>' + esc(round.restaurant_name) + '</b> · ' + esc(round.restaurant_phone) + ' · Gesamt ' + euro(total) + '</p>';
+      $("phoneList").innerHTML = groupedList.length ? groupedList.map(function (item) {
+        return '<label class="phone-line"><input type="checkbox"><span><b>' + item.quantity + ' × ' + esc(item.item_number) + ' ' + esc(item.item_name) + '</b>' +
+          (item.note ? '<br><span class="muted">Sonderwunsch: ' + esc(item.note) + '</span>' : '') + '</span></label>';
+      }).join("") : "<p>Noch keine Bestellpositionen vorhanden.</p>";
+      window.phoneOrderText = [round.restaurant_name, round.restaurant_phone, ""].concat(groupedList.map(function (item) {
+        return item.quantity + " x " + item.item_number + " " + item.item_name + (item.note ? " | Sonderwunsch: " + item.note : "");
+      }), ["", "Gesamt: " + euro(total)]).join("\n");
+    } catch (error) { console.error(error); $("ordersList").innerHTML = '<p class="error">' + esc(error.message) + '</p>'; }
+  }
+
+  $("copyOrder").addEventListener("click", async function () { await navigator.clipboard.writeText(window.phoneOrderText || ""); alert("Bestellung wurde kopiert."); });
+  $("exportCsv").addEventListener("click", function () {
+    var blob = new Blob(["\ufeff" + (window.phoneOrderText || "")], { type: "text/csv;charset=utf-8" });
+    var link = document.createElement("a"); link.href = URL.createObjectURL(blob); link.download = "bestellung.csv"; link.click(); URL.revokeObjectURL(link.href);
+  });
+  $("saveRound").addEventListener("click", async function () {
+    try {
+      await ILO_DB.saveRound({ restaurant_name: $("restaurantName").value.trim(), restaurant_phone: $("restaurantPhone").value.trim(), access_code: $("newRoundCode").value.trim(), deadline: $("newDeadline").value, delivery_time: $("deliveryTime").value || null, status: $("roundStatus").value });
+      $("roundSaveMessage").className = "success"; $("roundSaveMessage").textContent = "Bestellrunde wurde gespeichert.";
+      await loadManagerData();
+    } catch (error) { $("roundSaveMessage").className = "error"; $("roundSaveMessage").textContent = error.message; }
+  });
+
+  renderCart();
+  renderMenu();
+  databaseReady();
+  console.log("Indian Lunch Order: Benutzeroberfläche initialisiert");
+});
