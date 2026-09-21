@@ -765,10 +765,8 @@ document.addEventListener(
                                     Number(
                                         item.quantity
                                     ),
-                                spice:
-                                    item.spice || "",
-                                side:
-                                    item.side || "",
+                                spice: "",
+                                side: "",
                                 note:
                                     item.note || ""
                             }))
