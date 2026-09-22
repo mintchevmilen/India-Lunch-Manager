@@ -8,6 +8,101 @@ document.addEventListener("DOMContentLoaded", function () {
   var currentRound = null;
   var currentMenu = [];
   var cart = [];
+var APP_TIME_ZONE = "Europe/Berlin";
+
+function getTimeZoneParts(date, timeZone) {
+    var formatter = new Intl.DateTimeFormat(
+        "en-CA",
+        {
+            timeZone: timeZone,
+            year: "numeric",
+            month: "2-digit",
+            day: "2-digit",
+            hour: "2-digit",
+            minute: "2-digit",
+            second: "2-digit",
+            hourCycle: "h23"
+        }
+    );
+
+    var result = {};
+
+    formatter
+        .formatToParts(date)
+        .forEach(function (part) {
+            if (part.type !== "literal") {
+                result[part.type] = part.value;
+            }
+        });
+
+    return result;
+}
+
+function berlinLocalToUtcIso(localValue) {
+    if (!localValue) {
+        return null;
+    }
+
+    var match =
+        /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})$/
+            .exec(localValue);
+
+    if (!match) {
+        throw new Error(
+            "Ungültiges Datum oder ungültige Uhrzeit."
+        );
+    }
+
+    var requestedTime = Date.UTC(
+        Number(match[1]),
+        Number(match[2]) - 1,
+        Number(match[3]),
+        Number(match[4]),
+        Number(match[5]),
+        0
+    );
+
+    var calculatedTime = requestedTime;
+
+    for (var attempt = 0; attempt < 3; attempt += 1) {
+        var berlinParts =
+            getTimeZoneParts(
+                new Date(calculatedTime),
+                APP_TIME_ZONE
+            );
+
+        var displayedTime = Date.UTC(
+            Number(berlinParts.year),
+            Number(berlinParts.month) - 1,
+            Number(berlinParts.day),
+            Number(berlinParts.hour),
+            Number(berlinParts.minute),
+            Number(berlinParts.second)
+        );
+
+        calculatedTime +=
+            requestedTime - displayedTime;
+    }
+
+    return new Date(calculatedTime).toISOString();
+}
+
+function formatBerlinDateTime(timestamp) {
+    if (!timestamp) {
+        return "–";
+    }
+
+    return new Intl.DateTimeFormat(
+        "de-DE",
+        {
+            timeZone: APP_TIME_ZONE,
+            dateStyle: "short",
+            timeStyle: "short"
+        }
+    ).format(
+        new Date(timestamp)
+    );
+}
 
   function euro(value) {
     return Number(value || 0).toLocaleString("de-DE", { style: "currency", currency: "EUR" });
