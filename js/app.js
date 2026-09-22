@@ -2,116 +2,83 @@ console.log("Indian Lunch Order: app.js wird geladen");
 
 document.addEventListener("DOMContentLoaded", function () {
   "use strict";
+
   console.log("Indian Lunch Order: DOM vollständig geladen");
 
   var $ = function (id) { return document.getElementById(id); };
+  var APP_TIME_ZONE = "Europe/Berlin";
   var currentRound = null;
   var currentMenu = [];
   var cart = [];
-var APP_TIME_ZONE = "Europe/Berlin";
-
-function getTimeZoneParts(date, timeZone) {
-    var formatter = new Intl.DateTimeFormat(
-        "en-CA",
-        {
-            timeZone: timeZone,
-            year: "numeric",
-            month: "2-digit",
-            day: "2-digit",
-            hour: "2-digit",
-            minute: "2-digit",
-            second: "2-digit",
-            hourCycle: "h23"
-        }
-    );
-
-    var result = {};
-
-    formatter
-        .formatToParts(date)
-        .forEach(function (part) {
-            if (part.type !== "literal") {
-                result[part.type] = part.value;
-            }
-        });
-
-    return result;
-}
-
-function berlinLocalToUtcIso(localValue) {
-    if (!localValue) {
-        return null;
-    }
-
-    var match =
-        /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})$/
-            .exec(localValue);
-
-    if (!match) {
-        throw new Error(
-            "Ungültiges Datum oder ungültige Uhrzeit."
-        );
-    }
-
-    var requestedTime = Date.UTC(
-        Number(match[1]),
-        Number(match[2]) - 1,
-        Number(match[3]),
-        Number(match[4]),
-        Number(match[5]),
-        0
-    );
-
-    var calculatedTime = requestedTime;
-
-    for (var attempt = 0; attempt < 3; attempt += 1) {
-        var berlinParts =
-            getTimeZoneParts(
-                new Date(calculatedTime),
-                APP_TIME_ZONE
-            );
-
-        var displayedTime = Date.UTC(
-            Number(berlinParts.year),
-            Number(berlinParts.month) - 1,
-            Number(berlinParts.day),
-            Number(berlinParts.hour),
-            Number(berlinParts.minute),
-            Number(berlinParts.second)
-        );
-
-        calculatedTime +=
-            requestedTime - displayedTime;
-    }
-
-    return new Date(calculatedTime).toISOString();
-}
-
-function formatBerlinDateTime(timestamp) {
-    if (!timestamp) {
-        return "–";
-    }
-
-    return new Intl.DateTimeFormat(
-        "de-DE",
-        {
-            timeZone: APP_TIME_ZONE,
-            dateStyle: "short",
-            timeStyle: "short"
-        }
-    ).format(
-        new Date(timestamp)
-    );
-}
 
   function euro(value) {
-    return Number(value || 0).toLocaleString("de-DE", { style: "currency", currency: "EUR" });
+    return Number(value || 0).toLocaleString("de-DE", {
+      style: "currency",
+      currency: "EUR"
+    });
   }
 
   function esc(value) {
     return String(value == null ? "" : value).replace(/[&<>"]/g, function (character) {
       return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[character];
     });
+  }
+
+  function formatBerlinDateTime(timestamp) {
+    if (!timestamp) return "–";
+    return new Intl.DateTimeFormat("de-DE", {
+      timeZone: APP_TIME_ZONE,
+      dateStyle: "short",
+      timeStyle: "short"
+    }).format(new Date(timestamp));
+  }
+
+  function getBerlinParts(timestamp) {
+    var result = {};
+    new Intl.DateTimeFormat("en-CA", {
+      timeZone: APP_TIME_ZONE,
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+      hour: "2-digit",
+      minute: "2-digit",
+      second: "2-digit",
+      hourCycle: "h23"
+    }).formatToParts(new Date(timestamp)).forEach(function (part) {
+      if (part.type !== "literal") result[part.type] = part.value;
+    });
+    return result;
+  }
+
+  function berlinLocalToUtcIso(localValue) {
+    if (!localValue) return null;
+    var match = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})$/.exec(localValue);
+    if (!match) throw new Error("Ungültiges Datum oder ungültige Uhrzeit.");
+
+    var desiredWallClock = Date.UTC(
+      Number(match[1]),
+      Number(match[2]) - 1,
+      Number(match[3]),
+      Number(match[4]),
+      Number(match[5]),
+      0
+    );
+
+    var candidate = desiredWallClock;
+    for (var attempt = 0; attempt < 3; attempt += 1) {
+      var parts = getBerlinParts(candidate);
+      var candidateWallClock = Date.UTC(
+        Number(parts.year),
+        Number(parts.month) - 1,
+        Number(parts.day),
+        Number(parts.hour),
+        Number(parts.minute),
+        Number(parts.second)
+      );
+      candidate += desiredWallClock - candidateWallClock;
+    }
+
+    return new Date(candidate).toISOString();
   }
 
   function showMessage(text, type) {
@@ -148,9 +115,11 @@ function formatBerlinDateTime(timestamp) {
     if (!databaseReady()) return;
     var code = $("roundCode").value.trim();
     if (!code) return showMessage("Bitte einen Bestellcode eingeben.", "error");
+
     var button = $("loadRoundButton");
     button.disabled = true;
     button.textContent = "Wird geladen …";
+
     try {
       currentRound = await ILO_DB.activeRound(code);
       if (!currentRound) {
@@ -158,17 +127,12 @@ function formatBerlinDateTime(timestamp) {
         renderMenu();
         return showMessage("Keine offene Bestellrunde für diesen Code gefunden.", "error");
       }
+
       currentMenu = await ILO_DB.loadMenu(currentRound.id);
       $("roundBadge").textContent = "Bestellrunde offen";
-      $("roundInfo").textContent = [currentRound.restaurant_name, currentRound.restaurant_phone].filter(Boolean).join(" · ");
-      $("deadline").textContent = new Intl.DateTimeFormat("de-DE",{
-            timeZone: "Europe/Berlin",
-            dateStyle: "short",
-            timeStyle: "short"
-        }
-    ).format(
-        new Date(currentRound.deadline)
-    );
+      $("roundInfo").textContent = [currentRound.restaurant_name, currentRound.restaurant_phone]
+        .filter(Boolean).join(" · ");
+      $("deadline").textContent = formatBerlinDateTime(currentRound.deadline);
       renderCategories();
       renderMenu();
       showMessage(currentMenu.length + " Gerichte wurden geladen.", "success");
@@ -184,13 +148,19 @@ function formatBerlinDateTime(timestamp) {
 
   $("loadRoundButton").addEventListener("click", loadRound);
   $("roundCode").addEventListener("keydown", function (event) {
-    if (event.key === "Enter") { event.preventDefault(); loadRound(); }
+    if (event.key === "Enter") {
+      event.preventDefault();
+      loadRound();
+    }
   });
   $("search").addEventListener("input", renderMenu);
   $("category").addEventListener("change", renderMenu);
 
   function renderCategories() {
-    var categories = Array.from(new Set(currentMenu.map(function (item) { return item.category; }).filter(Boolean)));
+    var categories = Array.from(new Set(currentMenu.map(function (item) {
+      return item.category;
+    }).filter(Boolean)));
+
     $("category").innerHTML = '<option value="">Alle Kategorien</option>' + categories.map(function (category) {
       return '<option value="' + esc(category) + '">' + esc(category) + '</option>';
     }).join("");
@@ -201,12 +171,14 @@ function formatBerlinDateTime(timestamp) {
       $("menu").innerHTML = '<div class="card panel"><p>Noch keine Speisekarte geladen.</p></div>';
       return;
     }
+
     var query = $("search").value.toLowerCase().trim();
     var category = $("category").value;
     var filtered = currentMenu.filter(function (item) {
       var text = [item.item_number, item.name, item.description, item.category].join(" ").toLowerCase();
       return (!category || item.category === category) && (!query || text.indexOf(query) >= 0);
     });
+
     $("menu").innerHTML = filtered.map(function (item) {
       return '<article class="card dish">' +
         '<div class="top"><span class="tag">' + esc(item.item_number) + '</span><b>' + euro(item.price) + '</b></div>' +
@@ -215,6 +187,7 @@ function formatBerlinDateTime(timestamp) {
         '<div class="dish-controls"><input id="note-' + item.id + '" type="text" placeholder="Sonderwunsch, optional">' +
         '<button type="button" class="primary add-item-button" data-item-id="' + item.id + '">Hinzufügen</button></div></article>';
     }).join("");
+
     document.querySelectorAll(".add-item-button").forEach(function (button) {
       button.addEventListener("click", function () { addItem(button.dataset.itemId); });
     });
@@ -226,8 +199,18 @@ function formatBerlinDateTime(timestamp) {
     var note = $("note-" + itemId).value.trim();
     var key = itemId + "|" + note;
     var existing = cart.find(function (item) { return item.key === key; });
+
     if (existing) existing.quantity += 1;
-    else cart.push({ key: key, menu_item_id: itemId, item_number: menuItem.item_number, name: menuItem.name, unit_price: Number(menuItem.price), quantity: 1, note: note });
+    else cart.push({
+      key: key,
+      menu_item_id: itemId,
+      item_number: menuItem.item_number,
+      name: menuItem.name,
+      unit_price: Number(menuItem.price),
+      quantity: 1,
+      note: note
+    });
+
     renderCart();
     showMessage(menuItem.name + " wurde hinzugefügt.", "success");
   }
@@ -238,24 +221,39 @@ function formatBerlinDateTime(timestamp) {
     $("cartCount").textContent = String(count);
     $("cartTotal").textContent = euro(total);
     $("dialogTotal").textContent = euro(total);
-    if (!cart.length) return $("cartLines").innerHTML = "<p>Der Warenkorb ist leer.</p>";
+
+    if (!cart.length) {
+      $("cartLines").innerHTML = "<p>Der Warenkorb ist leer.</p>";
+      return;
+    }
+
     $("cartLines").innerHTML = cart.map(function (item, index) {
       return '<div class="row"><div><b>' + item.quantity + ' × ' + esc(item.name) + '</b>' +
         (item.note ? '<div class="muted">Sonderwunsch: ' + esc(item.note) + '</div>' : '') +
         '</div><div><b>' + euro(item.quantity * item.unit_price) + '</b><br>' +
         '<button type="button" class="remove-item" data-index="' + index + '">Entfernen</button></div></div>';
     }).join("");
+
     document.querySelectorAll(".remove-item").forEach(function (button) {
-      button.addEventListener("click", function () { cart.splice(Number(button.dataset.index), 1); renderCart(); });
+      button.addEventListener("click", function () {
+        cart.splice(Number(button.dataset.index), 1);
+        renderCart();
+      });
     });
   }
 
-  $("cartButton").addEventListener("click", function () { showCartMessage(""); $("cartDialog").showModal(); });
+  $("cartButton").addEventListener("click", function () {
+    showCartMessage("");
+    $("cartDialog").showModal();
+  });
 
   function createToken() {
     if (crypto.randomUUID) return crypto.randomUUID();
-    var values = new Uint8Array(16); crypto.getRandomValues(values);
-    return Array.from(values).map(function (value) { return value.toString(16).padStart(2, "0"); }).join("");
+    var values = new Uint8Array(16);
+    crypto.getRandomValues(values);
+    return Array.from(values).map(function (value) {
+      return value.toString(16).padStart(2, "0");
+    }).join("");
   }
 
   function myOrderContainer() {
@@ -271,27 +269,43 @@ function formatBerlinDateTime(timestamp) {
 
   function renderMyOrder(order) {
     var container = myOrderContainer();
-    if (!order) { container.classList.add("hidden"); container.innerHTML = ""; return; }
+    if (!order) {
+      container.classList.add("hidden");
+      container.innerHTML = "";
+      return;
+    }
+
     var items = order.items || [];
-    container.innerHTML = '<div class="actions"><div><span class="badge">Bestellung gespeichert</span><h2>Deine aktuelle Bestellung</h2>' +
-      '<p class="muted">Bestellung von ' + esc(order.participant_name) + '</p></div><b>' + euro(order.total_amount) + '</b></div>' +
+    container.innerHTML = '<div class="actions"><div><span class="badge">Bestellung gespeichert</span>' +
+      '<h2>Deine aktuelle Bestellung</h2><p class="muted">Bestellung von ' + esc(order.participant_name) + '</p></div>' +
+      '<b>' + euro(order.total_amount) + '</b></div>' +
       items.map(function (item) {
         return '<div class="row"><div><b>' + item.quantity + ' × ' + esc(item.item_number) + ' ' + esc(item.item_name) + '</b>' +
           (item.note ? '<div class="muted">Sonderwunsch: ' + esc(item.note) + '</div>' : '') +
           '</div><b>' + euro(item.quantity * item.unit_price) + '</b></div>';
-      }).join("") + '<div class="total"><b>Gesamt</b><b>' + euro(order.total_amount) + '</b></div>' +
-      '<p class="' + (order.paid ? 'success' : 'muted') + '">' + (order.paid ? 'Zahlung wurde bestätigt.' : 'Zahlung ist noch offen.') + '</p>';
+      }).join("") +
+      '<div class="total"><b>Gesamt</b><b>' + euro(order.total_amount) + '</b></div>' +
+      '<p class="' + (order.paid ? 'success' : 'muted') + '">' +
+      (order.paid ? 'Zahlung wurde bestätigt.' : 'Zahlung ist noch offen.') + '</p>';
+
     container.classList.remove("hidden");
   }
 
   async function loadMyStoredOrder() {
     if (!currentRound) return;
     var raw = localStorage.getItem("ilo_edit_" + currentRound.id);
-    if (!raw) return renderMyOrder(null);
+    if (!raw) {
+      renderMyOrder(null);
+      return;
+    }
+
     try {
       var stored = JSON.parse(raw);
       renderMyOrder(await ILO_DB.getMyOrder(stored.orderId, stored.editToken));
-    } catch (error) { console.error(error); renderMyOrder(null); }
+    } catch (error) {
+      console.error(error);
+      renderMyOrder(null);
+    }
   }
 
   $("submitOrder").addEventListener("click", async function () {
@@ -299,9 +313,12 @@ function formatBerlinDateTime(timestamp) {
     var name = $("participantName").value.trim();
     if (!name) return showCartMessage("Bitte deinen Namen eingeben.", "error");
     if (!cart.length) return showCartMessage("Der Warenkorb ist leer.", "error");
+
     var token = createToken();
     var button = $("submitOrder");
-    button.disabled = true; button.textContent = "Wird gespeichert …";
+    button.disabled = true;
+    button.textContent = "Wird gespeichert …";
+
     try {
       var orderId = await ILO_DB.submitOrder({
         p_round_code: $("roundCode").value.trim(),
@@ -309,17 +326,37 @@ function formatBerlinDateTime(timestamp) {
         p_edit_token: token,
         p_note: $("orderNote").value.trim(),
         p_items: cart.map(function (item) {
-          return { menu_item_id: item.menu_item_id, quantity: item.quantity, spice: "", side: "", note: item.note || "" };
+          return {
+            menu_item_id: item.menu_item_id,
+            quantity: item.quantity,
+            spice: "",
+            side: "",
+            note: item.note || ""
+          };
         })
       });
-      localStorage.setItem("ilo_edit_" + currentRound.id, JSON.stringify({ orderId: orderId, editToken: token, name: name }));
+
+      localStorage.setItem("ilo_edit_" + currentRound.id, JSON.stringify({
+        orderId: orderId,
+        editToken: token,
+        name: name
+      }));
+
       renderMyOrder(await ILO_DB.getMyOrder(orderId, token));
-      cart = []; renderCart();
+      cart = [];
+      renderCart();
       showCartMessage("Die Bestellung wurde erfolgreich gespeichert.", "success");
-      setTimeout(function () { $("cartDialog").close(); showMessage("Bestellung wurde erfolgreich gespeichert.", "success"); }, 900);
+      setTimeout(function () {
+        $("cartDialog").close();
+        showMessage("Bestellung wurde erfolgreich gespeichert.", "success");
+      }, 900);
     } catch (error) {
-      console.error(error); showCartMessage("Bestellung fehlgeschlagen: " + error.message, "error");
-    } finally { button.disabled = false; button.textContent = "Bestellung absenden"; }
+      console.error(error);
+      showCartMessage("Bestellung fehlgeschlagen: " + error.message, "error");
+    } finally {
+      button.disabled = false;
+      button.textContent = "Bestellung absenden";
+    }
   });
 
   async function initializeManager() {
@@ -329,14 +366,26 @@ function formatBerlinDateTime(timestamp) {
       $("loginCard").classList.toggle("hidden", Boolean(session));
       $("managerApp").classList.toggle("hidden", !session);
       if (session) await loadManagerData();
-    } catch (error) { $("loginMessage").textContent = error.message; }
+    } catch (error) {
+      $("loginMessage").textContent = error.message;
+    }
   }
 
   $("loginButton").addEventListener("click", async function () {
-    try { await ILO_DB.login($("managerEmail").value.trim(), $("managerPassword").value); await initializeManager(); }
-    catch (error) { $("loginMessage").className = "error"; $("loginMessage").textContent = "Anmeldung fehlgeschlagen: " + error.message; }
+    try {
+      await ILO_DB.login($("managerEmail").value.trim(), $("managerPassword").value);
+      await initializeManager();
+    } catch (error) {
+      $("loginMessage").className = "error";
+      $("loginMessage").textContent = "Anmeldung fehlgeschlagen: " + error.message;
+    }
   });
-  $("logoutButton").addEventListener("click", async function () { await ILO_DB.logout(); await initializeManager(); });
+
+  $("logoutButton").addEventListener("click", async function () {
+    await ILO_DB.logout();
+    await initializeManager();
+  });
+
   document.querySelectorAll("[data-tab]").forEach(function (button) {
     button.addEventListener("click", function () {
       document.querySelectorAll(".tab").forEach(function (tab) { tab.classList.add("hidden"); });
@@ -347,103 +396,152 @@ function formatBerlinDateTime(timestamp) {
   async function loadManagerData() {
     try {
       var round = await ILO_DB.getLatestRound();
-      if (!round) return $("ordersList").innerHTML = "<p>Keine Bestellrunde vorhanden.</p>";
+      if (!round) {
+        $("ordersList").innerHTML = "<p>Keine Bestellrunde vorhanden.</p>";
+        return;
+      }
+
       var orders = await ILO_DB.getOrders(round.id);
-      var allItems = orders.flatMap(function (order) { return (order.order_items || []).map(function (item) { return Object.assign({}, item, { participant_name: order.participant_name }); }); });
+      var allItems = orders.flatMap(function (order) {
+        return (order.order_items || []).map(function (item) {
+          return Object.assign({}, item, { participant_name: order.participant_name });
+        });
+      });
+
       var total = orders.reduce(function (sum, order) { return sum + Number(order.total_amount || 0); }, 0);
       var positionCount = allItems.reduce(function (sum, item) { return sum + Number(item.quantity); }, 0);
       var paidOrders = orders.filter(function (order) { return order.paid; });
       var openOrders = orders.filter(function (order) { return !order.paid; });
       var openAmount = openOrders.reduce(function (sum, order) { return sum + Number(order.total_amount || 0); }, 0);
-      $("managerStats").innerHTML = '<div class="stat">Bestellungen<b>' + orders.length + '</b></div>' +
-        '<div class="stat">Bezahlt<b>' + paidOrders.length + '</b></div><div class="stat">Zahlung offen<b>' + openOrders.length + '</b></div>' +
-        '<div class="stat">Offener Betrag<b>' + euro(openAmount) + '</b></div><div class="stat">Positionen<b>' + positionCount + '</b></div>' +
+
+      $("managerStats").innerHTML =
+        '<div class="stat">Bestellungen<b>' + orders.length + '</b></div>' +
+        '<div class="stat">Bezahlt<b>' + paidOrders.length + '</b></div>' +
+        '<div class="stat">Zahlung offen<b>' + openOrders.length + '</b></div>' +
+        '<div class="stat">Offener Betrag<b>' + euro(openAmount) + '</b></div>' +
+        '<div class="stat">Positionen<b>' + positionCount + '</b></div>' +
         '<div class="stat">Gesamtsumme<b>' + euro(total) + '</b></div>';
+
       $("ordersList").innerHTML = orders.length ? orders.map(function (order) {
-        var descriptions = (order.order_items || []).map(function (item) { return item.quantity + ' × ' + esc(item.item_name); }).join(", ");
-        return '<div class="row"><div><b>' + esc(order.participant_name) + '</b><div class="muted">' + descriptions + '</div></div>' +
-          '<div><b>' + euro(order.total_amount) + '</b><label style="display:flex;gap:7px;margin-top:7px;align-items:center">' +
-          '<input type="checkbox" class="paid-checkbox" data-order-id="' + order.id + '" ' + (order.paid ? 'checked' : '') + '>' +
-          '<span>' + (order.paid ? 'Bezahlt' : 'Zahlung offen') + '</span></label></div></div>';
+        var descriptions = (order.order_items || []).map(function (item) {
+          return item.quantity + ' × ' + esc(item.item_name);
+        }).join(", ");
+
+        return '<div class="row"><div><b>' + esc(order.participant_name) + '</b>' +
+          '<div class="muted">' + descriptions + '</div></div>' +
+          '<div><b>' + euro(order.total_amount) + '</b>' +
+          '<label style="display:flex;gap:7px;margin-top:7px;align-items:center">' +
+          '<input type="checkbox" class="paid-checkbox" data-order-id="' + order.id + '" ' +
+          (order.paid ? 'checked' : '') + '><span>' + (order.paid ? 'Bezahlt' : 'Zahlung offen') +
+          '</span></label></div></div>';
       }).join("") : "<p>Noch keine Bestellungen vorhanden.</p>";
+
       document.querySelectorAll(".paid-checkbox").forEach(function (checkbox) {
         checkbox.addEventListener("change", async function () {
-          var paid = checkbox.checked; checkbox.disabled = true;
-          try { await ILO_DB.setOrderPaid(checkbox.dataset.orderId, paid); await loadManagerData(); }
-          catch (error) { checkbox.checked = !paid; alert("Zahlungsstatus konnte nicht gespeichert werden: " + error.message); }
-          finally { checkbox.disabled = false; }
+          var paid = checkbox.checked;
+          checkbox.disabled = true;
+          try {
+            await ILO_DB.setOrderPaid(checkbox.dataset.orderId, paid);
+            await loadManagerData();
+          } catch (error) {
+            checkbox.checked = !paid;
+            alert("Zahlungsstatus konnte nicht gespeichert werden: " + error.message);
+          } finally {
+            checkbox.disabled = false;
+          }
         });
       });
+
       var grouped = {};
       allItems.forEach(function (item) {
         var key = item.menu_item_id + "|" + (item.note || "");
         if (!grouped[key]) grouped[key] = Object.assign({}, item, { quantity: 0 });
         grouped[key].quantity += Number(item.quantity);
       });
+
       var groupedList = Object.values(grouped);
-      $("phoneHeader").innerHTML = '<p><b>' + esc(round.restaurant_name) + '</b> · ' + esc(round.restaurant_phone) + ' · Gesamt ' + euro(total) + '</p>';
+      $("phoneHeader").innerHTML = '<p><b>' + esc(round.restaurant_name) + '</b> · ' +
+        esc(round.restaurant_phone) + ' · Gesamt ' + euro(total) + '</p>';
       $("phoneList").innerHTML = groupedList.length ? groupedList.map(function (item) {
-        return '<label class="phone-line"><input type="checkbox"><span><b>' + item.quantity + ' × ' + esc(item.item_number) + ' ' + esc(item.item_name) + '</b>' +
-          (item.note ? '<br><span class="muted">Sonderwunsch: ' + esc(item.note) + '</span>' : '') + '</span></label>';
+        return '<label class="phone-line"><input type="checkbox"><span><b>' + item.quantity +
+          ' × ' + esc(item.item_number) + ' ' + esc(item.item_name) + '</b>' +
+          (item.note ? '<br><span class="muted">Sonderwunsch: ' + esc(item.note) + '</span>' : '') +
+          '</span></label>';
       }).join("") : "<p>Noch keine Bestellpositionen vorhanden.</p>";
-      window.phoneOrderText = [round.restaurant_name, round.restaurant_phone, ""].concat(groupedList.map(function (item) {
-        return item.quantity + " x " + item.item_number + " " + item.item_name + (item.note ? " | Sonderwunsch: " + item.note : "");
-      }), ["", "Gesamt: " + euro(total)]).join("\n");
-    } catch (error) { console.error(error); $("ordersList").innerHTML = '<p class="error">' + esc(error.message) + '</p>'; }
+
+      window.phoneOrderText = [round.restaurant_name, round.restaurant_phone, ""].concat(
+        groupedList.map(function (item) {
+          return item.quantity + " x " + item.item_number + " " + item.item_name +
+            (item.note ? " | Sonderwunsch: " + item.note : "");
+        }),
+        ["", "Gesamt: " + euro(total)]
+      ).join("\n");
+    } catch (error) {
+      console.error(error);
+      $("ordersList").innerHTML = '<p class="error">' + esc(error.message) + '</p>';
+    }
   }
 
-  $("copyOrder").addEventListener("click", async function () { await navigator.clipboard.writeText(window.phoneOrderText || ""); alert("Bestellung wurde kopiert."); });
-  $("exportCsv").addEventListener("click", function () {
-    var blob = new Blob(["\ufeff" + (window.phoneOrderText || "")], { type: "text/csv;charset=utf-8" });
-    var link = document.createElement("a"); link.href = URL.createObjectURL(blob); link.download = "bestellung.csv"; link.click(); URL.revokeObjectURL(link.href);
+  $("copyOrder").addEventListener("click", async function () {
+    await navigator.clipboard.writeText(window.phoneOrderText || "");
+    alert("Bestellung wurde kopiert.");
   });
+
+  $("exportCsv").addEventListener("click", function () {
+    var blob = new Blob(["\ufeff" + (window.phoneOrderText || "")], {
+      type: "text/csv;charset=utf-8"
+    });
+    var link = document.createElement("a");
+    link.href = URL.createObjectURL(blob);
+    link.download = "bestellung.csv";
+    link.click();
+    URL.revokeObjectURL(link.href);
+  });
+
   $("saveRound").addEventListener("click", async function () {
+    var message = $("roundSaveMessage");
+    var deadlineInput = $("newDeadline").value;
+    var deliveryInput = $("deliveryTime").value;
+
+    if (!$("restaurantName").value.trim() || !$("newRoundCode").value.trim() || !deadlineInput) {
+      message.className = "error";
+      message.textContent = "Restaurant, Bestellcode und Bestellfrist sind erforderlich.";
+      return;
+    }
+
+    var button = $("saveRound");
+    button.disabled = true;
+    button.textContent = "Wird gespeichert …";
+
     try {
-    var deadlineInput =
-    $("newDeadline").value;
+      var deadlineUtc = berlinLocalToUtcIso(deadlineInput);
+      var deliveryUtc = deliveryInput ? berlinLocalToUtcIso(deliveryInput) : null;
 
-var deliveryInput =
-    $("deliveryTime").value;
+      await ILO_DB.saveRound({
+        restaurant_name: $("restaurantName").value.trim(),
+        restaurant_phone: $("restaurantPhone").value.trim(),
+        access_code: $("newRoundCode").value.trim(),
+        deadline: deadlineUtc,
+        delivery_time: deliveryUtc,
+        status: $("roundStatus").value
+      });
 
-if (!deadlineInput) {
-    throw new Error(
-        "Bitte einen Bestellschluss eingeben."
-    );
-}
-
-var deadlineUtc =
-    berlinLocalToUtcIso(deadlineInput);
-
-var deliveryUtc =
-    deliveryInput
-        ? berlinLocalToUtcIso(deliveryInput)
-        : null;
-
-await ILO_DB.saveRound({
-    restaurant_name:
-        $("restaurantName").value.trim(),
-
-    restaurant_phone:
-        $("restaurantPhone").value.trim(),
-
-    access_code:
-        $("newRoundCode").value.trim(),
-
-    deadline:
-        deadlineUtc,
-
-    delivery_time:
-        deliveryUtc,
-
-    status:
-        $("roundStatus").value
-});
-
-
-
+      message.className = "success";
+      message.textContent = "Bestellrunde gespeichert. Bestellschluss: " +
+        formatBerlinDateTime(deadlineUtc) + " Uhr (Berlin).";
+      await loadManagerData();
+    } catch (error) {
+      console.error(error);
+      message.className = "error";
+      message.textContent = "Bestellrunde konnte nicht gespeichert werden: " + error.message;
+    } finally {
+      button.disabled = false;
+      button.textContent = "Bestellrunde speichern";
+    }
+  });
 
   renderCart();
   renderMenu();
   databaseReady();
-  console.log("Indian Lunch Order: Benutzeroberfläche initialisiert");
+  console.log("Indian Lunch Order: Benutzeroberfläche initialisiert; Zeitzone Europe/Berlin aktiv");
 });
