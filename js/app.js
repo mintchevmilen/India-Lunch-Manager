@@ -66,7 +66,14 @@ document.addEventListener("DOMContentLoaded", function () {
       currentMenu = await ILO_DB.loadMenu(currentRound.id);
       $("roundBadge").textContent = "Bestellrunde offen";
       $("roundInfo").textContent = [currentRound.restaurant_name, currentRound.restaurant_phone].filter(Boolean).join(" · ");
-      $("deadline").textContent = new Date(currentRound.deadline).toLocaleString("de-DE", { dateStyle: "short", timeStyle: "short" });
+      $("deadline").textContent = new Intl.DateTimeFormat("de-DE",{
+            timeZone: "Europe/Berlin",
+            dateStyle: "short",
+            timeStyle: "short"
+        }
+    ).format(
+        new Date(currentRound.deadline)
+    );
       renderCategories();
       renderMenu();
       showMessage(currentMenu.length + " Gerichte wurden geladen.", "success");
