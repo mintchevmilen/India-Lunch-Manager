@@ -10,8 +10,15 @@
   var configured = hasUrl && hasKey && libraryAvailable;
   var client = configured ? window.supabase.createClient(config.supabaseUrl, config.supabaseAnonKey) : null;
 
-  if (configured) console.log("Indian Lunch Order: Supabase-Client erstellt");
-  else console.error("Supabase nicht bereit", { hasUrl: hasUrl, hasKey: hasKey, libraryAvailable: libraryAvailable });
+  if (configured) {
+    console.log("Indian Lunch Order: Supabase-Client erstellt");
+  } else {
+    console.error("Supabase nicht bereit", {
+      hasUrl: hasUrl,
+      hasKey: hasKey,
+      libraryAvailable: libraryAvailable
+    });
+  }
 
   function ensureClient() {
     if (!libraryAvailable) throw new Error("Die Supabase-Bibliothek wurde nicht geladen.");
@@ -35,14 +42,21 @@
     configured: configured,
 
     activeRound: async function (code) {
-      var response = await ensureClient().rpc("get_active_round", { p_code: String(code || "").trim() });
+      var response = await ensureClient().rpc("get_active_round", {
+        p_code: String(code || "").trim()
+      });
       if (response.error) throw detailedError(response.error, "Bestellrunde konnte nicht geladen werden");
       return Array.isArray(response.data) ? (response.data[0] || null) : null;
     },
 
     loadMenu: async function (roundId) {
-      var response = await ensureClient().from("menu_items").select("*")
-        .eq("round_id", roundId).eq("available", true).order("category").order("item_number");
+      var response = await ensureClient()
+        .from("menu_items")
+        .select("*")
+        .eq("round_id", roundId)
+        .eq("available", true)
+        .order("category")
+        .order("item_number");
       if (response.error) throw detailedError(response.error, "Speisekarte konnte nicht geladen werden");
       return response.data || [];
     },
@@ -63,7 +77,10 @@
     },
 
     login: async function (email, password) {
-      var response = await ensureClient().auth.signInWithPassword({ email: email, password: password });
+      var response = await ensureClient().auth.signInWithPassword({
+        email: email,
+        password: password
+      });
       if (response.error) throw detailedError(response.error, "Anmeldung fehlgeschlagen");
       return response.data;
     },
@@ -80,23 +97,38 @@
     },
 
     getLatestRound: async function () {
-      var response = await ensureClient().from("order_rounds").select("*")
-        .order("created_at", { ascending: false }).limit(1).maybeSingle();
+      var response = await ensureClient()
+        .from("order_rounds")
+        .select("*")
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
       if (response.error) throw detailedError(response.error, "Bestellrunde konnte nicht geladen werden");
       return response.data;
     },
 
     getOrders: async function (roundId) {
       var db = ensureClient();
-      var ordersResponse = await db.from("orders").select("*")
-        .eq("round_id", roundId).order("created_at", { ascending: true });
+      var ordersResponse = await db
+        .from("orders")
+        .select("*")
+        .eq("round_id", roundId)
+        .order("created_at", { ascending: true });
+
       if (ordersResponse.error) throw detailedError(ordersResponse.error, "Bestellungen konnten nicht geladen werden");
+
       var orders = ordersResponse.data || [];
       if (!orders.length) return [];
+
       var orderIds = orders.map(function (order) { return order.id; });
-      var itemsResponse = await db.from("order_items").select("*")
-        .in("order_id", orderIds).order("id", { ascending: true });
+      var itemsResponse = await db
+        .from("order_items")
+        .select("*")
+        .in("order_id", orderIds)
+        .order("id", { ascending: true });
+
       if (itemsResponse.error) throw detailedError(itemsResponse.error, "Bestellpositionen konnten nicht geladen werden");
+
       var items = itemsResponse.data || [];
       return orders.map(function (order) {
         var copy = Object.assign({}, order);
@@ -114,7 +146,11 @@
     },
 
     saveRound: async function (roundData) {
-      var response = await ensureClient().from("order_rounds").insert(roundData).select().single();
+      var response = await ensureClient()
+        .from("order_rounds")
+        .insert(roundData)
+        .select()
+        .single();
       if (response.error) throw detailedError(response.error, "Bestellrunde konnte nicht gespeichert werden");
       return response.data;
     }
