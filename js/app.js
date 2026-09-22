@@ -439,18 +439,8 @@ await ILO_DB.saveRound({
         $("roundStatus").value
 });
 
-$("roundSaveMessage").className =
-    "success";
 
-$("roundSaveMessage").textContent =
-    "Bestellrunde gespeichert. " +
-    "Bestellschluss: " +
-    formatBerlinDateTime(deadlineUtc) +
-    " Uhr";
-      $("roundSaveMessage").className = "success"; $("roundSaveMessage").textContent = "Bestellrunde wurde gespeichert.";
-      await loadManagerData();
-    } catch (error) { $("roundSaveMessage").className = "error"; $("roundSaveMessage").textContent = error.message; }
-  });
+
 
   renderCart();
   renderMenu();
