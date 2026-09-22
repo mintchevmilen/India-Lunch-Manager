@@ -399,7 +399,54 @@ function formatBerlinDateTime(timestamp) {
   });
   $("saveRound").addEventListener("click", async function () {
     try {
-      await ILO_DB.saveRound({ restaurant_name: $("restaurantName").value.trim(), restaurant_phone: $("restaurantPhone").value.trim(), access_code: $("newRoundCode").value.trim(), deadline: $("newDeadline").value, delivery_time: $("deliveryTime").value || null, status: $("roundStatus").value });
+    var deadlineInput =
+    $("newDeadline").value;
+
+var deliveryInput =
+    $("deliveryTime").value;
+
+if (!deadlineInput) {
+    throw new Error(
+        "Bitte einen Bestellschluss eingeben."
+    );
+}
+
+var deadlineUtc =
+    berlinLocalToUtcIso(deadlineInput);
+
+var deliveryUtc =
+    deliveryInput
+        ? berlinLocalToUtcIso(deliveryInput)
+        : null;
+
+await ILO_DB.saveRound({
+    restaurant_name:
+        $("restaurantName").value.trim(),
+
+    restaurant_phone:
+        $("restaurantPhone").value.trim(),
+
+    access_code:
+        $("newRoundCode").value.trim(),
+
+    deadline:
+        deadlineUtc,
+
+    delivery_time:
+        deliveryUtc,
+
+    status:
+        $("roundStatus").value
+});
+
+$("roundSaveMessage").className =
+    "success";
+
+$("roundSaveMessage").textContent =
+    "Bestellrunde gespeichert. " +
+    "Bestellschluss: " +
+    formatBerlinDateTime(deadlineUtc) +
+    " Uhr";
       $("roundSaveMessage").className = "success"; $("roundSaveMessage").textContent = "Bestellrunde wurde gespeichert.";
       await loadManagerData();
     } catch (error) { $("roundSaveMessage").className = "error"; $("roundSaveMessage").textContent = error.message; }
